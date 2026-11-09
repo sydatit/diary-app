@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { BrandMark } from '../components/Brand'
+import { ThemeToggle } from '../components/ThemeToggle'
 
 export function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer: ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
         </div>
       </div>
       <div className="auth-main">
+        <ThemeToggle className="auth-theme" />
         <div className="auth-card">
           <div className="auth-logo">
             <BrandMark size={36} />

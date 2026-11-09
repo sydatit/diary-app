@@ -63,7 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const exp = session.token ? tokenExpiry(session.token) : null
     if (!exp) return
-    const t = window.setTimeout(signOut, Math.max(0, exp - Date.now()))
+    const delay = Math.max(0, exp - Date.now())
+    // setTimeout overflows above 2^31-1 ms (~24.8 days) and would fire immediately.
+    if (delay > 2_147_483_647) return
+    const t = window.setTimeout(signOut, delay)
     return () => window.clearTimeout(t)
   }, [userId, signOut])
 

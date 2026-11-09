@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import { GuestOnly, RequireAuth } from './auth/RequireAuth'
 import { ToastProvider } from './components/Toast'
+import { ThemeProvider } from './lib/theme'
 import { Layout } from './components/Layout'
 import SignIn from './pages/SignIn'
 import Register from './pages/Register'
@@ -13,6 +14,7 @@ import Settings from './pages/Settings'
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
@@ -36,5 +38,6 @@ export default function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   )
 }

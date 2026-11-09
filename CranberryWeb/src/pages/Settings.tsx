@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { LogOut } from 'lucide-react'
+import { LogOut, Monitor, Moon, Sun } from 'lucide-react'
+import { useTheme, type ThemePref } from '../lib/theme'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { DetoxFields } from '../components/DetoxFields'
@@ -13,6 +14,7 @@ import type { DetoxSetup } from '../types'
 export default function Settings() {
   const { profile, userId, refreshProfile, signOut } = useAuth()
   const toast = useToast()
+  const { pref, setPref } = useTheme()
   const [setup, setSetup] = useState<DetoxSetup>(() => ({
     detoxStartDate: normalizeDate(profile?.detoxStartDate) || toISODate(),
     baselinePickups: profile?.baselinePickups ?? 0,
@@ -72,6 +74,27 @@ export default function Settings() {
           <Button variant="secondary" icon={<LogOut size={16} />} onClick={signOut}>
             Sign out
           </Button>
+        </div>
+      </section>
+
+      <section className="card appearance">
+        <div className="grow">
+          <h2>Appearance</h2>
+          <p className="muted small">Dark mode is easier on the eyes at night. System follows your device.</p>
+        </div>
+        <div className="segmented" role="radiogroup" aria-label="Theme">
+          {(
+            [
+              ['system', 'System', Monitor],
+              ['light', 'Light', Sun],
+              ['dark', 'Dark', Moon],
+            ] as [ThemePref, string, typeof Sun][]
+          ).map(([v, label, Icon]) => (
+            <button key={v} type="button" role="radio" aria-checked={pref === v} className={pref === v ? 'active' : ''} onClick={() => setPref(v)}>
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
         </div>
       </section>
 

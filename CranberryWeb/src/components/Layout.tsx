@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BookOpen, Home, LogOut, PenLine, Settings } from 'lucide-react'
 import { Brand } from './Brand'
+import { ThemeToggle } from './ThemeToggle'
 import { useAuth } from '../auth/AuthContext'
 
 const links = [
@@ -33,6 +34,7 @@ export function Layout() {
         <div className="sidebar-user">
           <span className="avatar">{initial}</span>
           <span className="sidebar-user-name">{profile?.userName}</span>
+          <ThemeToggle />
           <button className="icon-btn" onClick={signOut} aria-label="Sign out" title="Sign out">
             <LogOut size={16} />
           </button>
@@ -41,7 +43,10 @@ export function Layout() {
 
       <header className="topbar">
         <Brand />
-        <span className="avatar">{initial}</span>
+        <div className="row">
+          <ThemeToggle />
+          <span className="avatar">{initial}</span>
+        </div>
       </header>
 
       <main className="main">

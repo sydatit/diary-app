@@ -36,37 +36,36 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #171412;
-    --bg-soft: #1e1a17;
-    --surface: #211d1a;
-    --surface-2: #26211d;
-    --border: #332d28;
-    --border-strong: #423a33;
-    --text: #f2ece5;
-    --text-2: #c4b9ad;
-    --muted: #8c8176;
+/* Dark theme: applied via <html data-theme="dark"> (user's choice, or the system setting). Low-glare for night use. */
+:root[data-theme='dark'] {
+  --bg: #141210;
+  --bg-soft: #1a1715;
+  --surface: #1e1b18;
+  --surface-2: #221e1b;
+  --border: #2e2925;
+  --border-strong: #3c3530;
+  --text: #e8e1d8;
+  --text-2: #bdb2a6;
+  --muted: #877c71;
 
-    --accent: #6cc0a8;
-    --accent-hover: #84cdb8;
-    --accent-soft: #1c3530;
-    --accent-text: #0e1f1b;
-    --leaf: #7fb38d;
-    --rose: #e07a8e;
+  --accent: #5fb39c;
+  --accent-hover: #74c1ab;
+  --accent-soft: #1a302b;
+  --accent-text: #0c1c18;
+  --leaf: #76a986;
+  --rose: #d77588;
 
-    --sage: #7fb38d;
-    --olive: #b3bd72;
-    --amber: #e6b65a;
-    --coral: #ec8770;
-    --good-soft: #1f2d23;
+  --sage: #76a986;
+  --olive: #a9b36c;
+  --amber: #d9ab55;
+  --coral: #dd806b;
+  --good-soft: #1c2a21;
 
-    --danger: #ef6b5b;
-    --danger-soft: #3a1e1a;
+  --danger: #e2685a;
+  --danger-soft: #36201c;
 
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
 
-    color-scheme: dark;
-  }
+  color-scheme: dark;
 }

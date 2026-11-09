@@ -12,6 +12,7 @@ body,
 
 body {
   margin: 0;
+  transition: background-color 0.25s ease, color 0.25s ease;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
@@ -1018,6 +1019,12 @@ input::placeholder {
   font-weight: 500;
   color: var(--text-2);
 }
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
 .segmented button.active {
   background: var(--surface);
   color: var(--text);
@@ -1236,6 +1243,20 @@ input::placeholder {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+.appearance {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.auth-main {
+  position: relative;
+}
+.auth-theme {
+  position: absolute;
+  top: 20px;
+  right: 20px;
 }
 .danger-zone {
   display: flex;
