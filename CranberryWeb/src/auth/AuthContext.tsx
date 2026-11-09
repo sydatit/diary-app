@@ -8,6 +8,8 @@ interface AuthState {
   profile: UserProfile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  /** Store a session obtained elsewhere (e.g. after email verification). */
+  completeSignIn: (token: string, userId: string) => void
   signOut: () => void
   refreshProfile: () => Promise<void>
 }
@@ -65,15 +67,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t)
   }, [userId, signOut])
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const res = await usersApi.signIn(email, password)
-    session.save(res.token, res.userId)
-    setUserId(res.userId)
+  const completeSignIn = useCallback((token: string, id: string) => {
+    session.save(token, id)
+    setUserId(id)
   }, [])
 
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const res = await usersApi.signIn(email, password)
+      completeSignIn(res.token, res.userId)
+    },
+    [completeSignIn],
+  )
+
   const value = useMemo(
-    () => ({ userId, profile, loading, signIn, signOut, refreshProfile }),
-    [userId, profile, loading, signIn, signOut, refreshProfile],
+    () => ({ userId, profile, loading, signIn, completeSignIn, signOut, refreshProfile }),
+    [userId, profile, loading, signIn, completeSignIn, signOut, refreshProfile],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

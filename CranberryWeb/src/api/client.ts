@@ -1,6 +1,6 @@
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
-const TOKEN_KEY = 'cranberry.token'
-const USER_KEY = 'cranberry.userId'
+const TOKEN_KEY = 'unplug.token'
+const USER_KEY = 'unplug.userId'
 
 export const session = {
   get token() {
@@ -21,9 +21,16 @@ export const session = {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Machine-readable code from the API, e.g. "EmailNotConfirmed", "Expired". */
+  code?: string
+  body: unknown
+  constructor(status: number, message: string, body?: unknown) {
     super(message)
     this.status = status
+    this.body = body
+    if (body && typeof body === 'object' && 'code' in body && typeof (body as { code: unknown }).code === 'string') {
+      this.code = (body as { code: string }).code
+    }
   }
 }
 
@@ -84,7 +91,7 @@ export async function api<T = void>(path: string, options: { method?: string; bo
 
   if (!res.ok) {
     if (res.status === 401 && token) onUnauthorized?.()
-    throw new ApiError(res.status, extractMessage(body, res.status))
+    throw new ApiError(res.status, extractMessage(body, res.status), body)
   }
   return body as T
 }

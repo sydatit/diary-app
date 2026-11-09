@@ -8,9 +8,9 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
         <div className="auth-aside-inner">
           <BrandMark size={40} />
           <blockquote>
-            “Every day without a cigarette is a small, quiet victory. Write it down.”
+            “Put the phone down. Pick your life up.”
           </blockquote>
-          <p>Cranberry is a calm place to track cravings, celebrate progress and see how far you've come.</p>
+          <p>Unplug is a quiet daily journal for loosening your phone's grip — notice the urge, reflect on your day, and watch the pickups fall.</p>
         </div>
       </div>
       <div className="auth-main">
@@ -19,7 +19,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
             <BrandMark size={36} />
           </div>
           <h1>{title}</h1>
-          <p className="muted">{subtitle}</p>
+          {subtitle && <p className="muted">{subtitle}</p>}
           {children}
           <div className="auth-footer">{footer}</div>
         </div>

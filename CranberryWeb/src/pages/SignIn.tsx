@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { ApiError } from '../api/client'
+import { usersApi } from '../api/users'
 import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
@@ -24,6 +26,12 @@ export default function SignIn() {
       const from = (location.state as { from?: string } | null)?.from
       navigate(from && from !== '/signin' ? from : '/', { replace: true })
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'EmailNotConfirmed') {
+        // Password was right but the account isn't active yet: send a fresh code and go verify.
+        await usersApi.resendCode(email.trim()).catch(() => {})
+        navigate('/verify', { state: { email: email.trim(), sent: true } })
+        return
+      }
       setError(err instanceof Error && err.message !== 'Unable to sign in.' ? err.message : 'Incorrect email or password.')
       setBusy(false)
     }
@@ -35,7 +43,7 @@ export default function SignIn() {
       subtitle="Sign in to continue your journal."
       footer={
         <>
-          New to Cranberry? <Link to="/register">Create an account</Link>
+          New to Unplug? <Link to="/register">Create an account</Link>
         </>
       }
     >

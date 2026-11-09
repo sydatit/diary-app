@@ -1,11 +1,15 @@
 import { Link } from 'react-router-dom'
-import { Cigarette, Leaf } from 'lucide-react'
+import { Smartphone } from 'lucide-react'
 import type { Journal } from '../types'
 import { parseDate, fmt } from '../lib/date'
-import { CravingDots } from './CravingSlider'
+import { firstLine, moodOf } from '../lib/stats'
+import { UrgeDots } from './UrgeSlider'
 
-export function EntryCard({ entry }: { entry: Journal }) {
+export function EntryCard({ entry, goal }: { entry: Journal; goal: number }) {
   const d = parseDate(entry.date)
+  const mood = moodOf(entry.mood)
+  const met = goal > 0 && entry.pickups <= goal
+  const text = firstLine(entry)
   return (
     <Link to={`/journal/${entry.journalId}`} className="entry">
       <div className="entry-date">
@@ -14,13 +18,16 @@ export function EntryCard({ entry }: { entry: Journal }) {
       </div>
       <div className="entry-body">
         <div className="entry-meta">
-          <CravingDots value={entry.cravingIntensity} />
-          <span className={`entry-cigs ${entry.cigsSmoked === 0 ? 'free' : ''}`}>
-            {entry.cigsSmoked === 0 ? <Leaf size={14} /> : <Cigarette size={14} />}
-            {entry.cigsSmoked === 0 ? 'Smoke-free' : `${entry.cigsSmoked} smoked`}
+          <span className="entry-mood" title={mood.label}>
+            {mood.emoji}
           </span>
+          <span className={`entry-pickups ${met ? 'met' : 'over'}`} title={goal ? `Goal: ${goal}` : undefined}>
+            <Smartphone size={13} />
+            {entry.pickups} pickups
+          </span>
+          <UrgeDots value={entry.urgeLevel} />
         </div>
-        <p className={`entry-notes ${entry.notes ? '' : 'muted'}`}>{entry.notes || 'No notes'}</p>
+        <p className={`entry-notes ${text ? '' : 'muted'}`}>{text || 'No reflection written'}</p>
       </div>
     </Link>
   )

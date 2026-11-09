@@ -27,19 +27,34 @@ namespace CranberryAPI.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
 
-                    b.Property<int>("AvgSmokedDaily")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CigsPerPack")
+                    b.Property<int>("BaselinePickups")
                         .HasColumnType("int");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("longtext");
 
+                    b.Property<int>("DailyPickupGoal")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DetoxStartDate")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
+
+                    b.Property<int>("EmailCodeAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EmailCodeExpiresAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("EmailCodeHash")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("EmailCodeSentAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("tinyint(1)");
@@ -66,12 +81,6 @@ namespace CranberryAPI.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("tinyint(1)");
-
-                    b.Property<float>("PricePerPack")
-                        .HasColumnType("float");
-
-                    b.Property<string>("QuitDate")
-                        .HasColumnType("longtext");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("longtext");
@@ -101,24 +110,39 @@ namespace CranberryAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    b.Property<int>("CigsSmoked")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CravingIntensity")
-                        .HasColumnType("int");
-
                     b.Property<string>("Date")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<string>("DayReflection")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("Notes")
+                    b.Property<string>("Gratitude")
                         .HasColumnType("longtext");
+
+                    b.Property<string>("Improvement")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Mood")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Pickups")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UrgeLevel")
+                        .HasColumnType("int");
 
                     b.Property<string>("UserId")
                         .HasColumnType("varchar(255)");
 
+                    b.Property<string>("Win")
+                        .HasColumnType("longtext");
+
                     b.HasKey("JournalId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "Date")
+                        .IsUnique();
 
                     b.ToTable("Journals");
                 });

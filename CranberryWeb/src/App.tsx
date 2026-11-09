@@ -5,6 +5,7 @@ import { ToastProvider } from './components/Toast'
 import { Layout } from './components/Layout'
 import SignIn from './pages/SignIn'
 import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import Journal from './pages/Journal'
 import EntryEditor from './pages/EntryEditor'
@@ -19,6 +20,7 @@ export default function App() {
             <Route element={<GuestOnly />}>
               <Route path="/signin" element={<SignIn />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/verify" element={<VerifyEmail />} />
             </Route>
             <Route element={<RequireAuth />}>
               <Route element={<Layout />}>

@@ -20,7 +20,7 @@ export function Layout() {
         <Brand />
         <button className="btn btn-primary btn-block sidebar-cta" onClick={() => navigate('/journal/new')}>
           <PenLine size={16} />
-          <span>New entry</span>
+          <span>Reflect</span>
         </button>
         <nav>
           {links.map(({ to, label, icon: Icon, end }) => (
@@ -57,7 +57,7 @@ export function Layout() {
             <span>{label}</span>
           </NavLink>
         ))}
-        <NavLink to="/journal/new" className="tab tab-fab" aria-label="New entry">
+        <NavLink to="/journal/new" className="tab tab-fab" aria-label="Reflect on today">
           <PenLine size={20} />
         </NavLink>
         {links.slice(2).map(({ to, label, icon: Icon, end }) => (

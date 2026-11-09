@@ -2,83 +2,81 @@ import type { Journal, UserProfile } from '../types'
 import { addDays, daysBetween, parseDate, startOfDay, toISODate } from './date'
 
 export interface Stats {
-  daysFree: number
+  dayNumber: number
   started: boolean
-  cigsAvoided: number
-  moneySaved: number
-  cigsSinceQuit: number
-  avgCraving7: number | null
-  entries7: number
+  avgPickups7: number | null
+  pickupsAvoided: number
+  avgUrge7: number | null
+  avgMood7: number | null
   streak: number
+  goalDays7: number
+  entries7: number
 }
 
 export function computeStats(profile: UserProfile, journals: Journal[]): Stats {
   const today = startOfDay(new Date())
-  const quit = parseDate(profile.quitDate)
-  const daysFree = quit ? Math.max(0, daysBetween(quit, today)) : 0
-  const started = !!quit && quit <= today
-
-  const cigsSinceQuit = journals.reduce((sum, j) => {
-    const d = parseDate(j.date)
-    return d && quit && d >= quit ? sum + (j.cigsSmoked || 0) : sum
-  }, 0)
-
-  const cigsAvoided = Math.max(0, daysFree * (profile.avgSmokedDaily || 0) - cigsSinceQuit)
-  const perCig = profile.cigsPerPack > 0 ? profile.pricePerPack / profile.cigsPerPack : 0
-  const moneySaved = cigsAvoided * perCig
+  const start = parseDate(profile.detoxStartDate)
+  const started = !!start && start <= today
+  const dayNumber = start && started ? daysBetween(start, today) + 1 : 0
 
   const weekAgo = addDays(today, -6)
   const recent = journals.filter((j) => {
     const d = parseDate(j.date)
     return d && d >= weekAgo && d <= today
   })
-  const avgCraving7 = recent.length ? recent.reduce((s, j) => s + j.cravingIntensity, 0) / recent.length : null
+  const avg = (f: (j: Journal) => number) => (recent.length ? recent.reduce((s, j) => s + f(j), 0) / recent.length : null)
 
-  // Consecutive days (ending today or yesterday) with a journal entry and zero cigarettes.
-  const byDay = groupByDay(journals)
+  const baseline = profile.baselinePickups || 0
+  const pickupsAvoided = journals.reduce((s, j) => {
+    const d = parseDate(j.date)
+    return d && (!start || d >= start) ? s + Math.max(0, baseline - j.pickups) : s
+  }, 0)
+
+  // Consecutive days with a reflection, ending today (or yesterday if today isn't written yet).
+  const days = new Set(journals.map((j) => normalize(j.date)))
   let streak = 0
-  let cursor = byDay.has(toISODate(today)) ? today : addDays(today, -1)
-  while (true) {
-    const list = byDay.get(toISODate(cursor))
-    if (!list || list.some((j) => j.cigsSmoked > 0)) break
+  let cursor = days.has(toISODate(today)) ? today : addDays(today, -1)
+  while (days.has(toISODate(cursor))) {
     streak++
     cursor = addDays(cursor, -1)
   }
 
-  return { daysFree, started, cigsAvoided, moneySaved, cigsSinceQuit, avgCraving7, entries7: recent.length, streak }
+  const goal = profile.dailyPickupGoal
+  return {
+    dayNumber,
+    started,
+    avgPickups7: avg((j) => j.pickups),
+    pickupsAvoided,
+    avgUrge7: avg((j) => j.urgeLevel),
+    avgMood7: avg((j) => j.mood),
+    streak,
+    goalDays7: goal > 0 ? recent.filter((j) => j.pickups <= goal).length : 0,
+    entries7: recent.length,
+  }
 }
 
-export function groupByDay(journals: Journal[]): Map<string, Journal[]> {
-  const map = new Map<string, Journal[]>()
-  for (const j of journals) {
-    const d = parseDate(j.date)
-    if (!d) continue
-    const key = toISODate(d)
-    const list = map.get(key)
-    if (list) list.push(j)
-    else map.set(key, [j])
-  }
-  return map
+function normalize(date: string): string {
+  const d = parseDate(date)
+  return d ? toISODate(d) : ''
+}
+
+export function findByDate(journals: Journal[], iso: string): Journal | undefined {
+  return journals.find((j) => normalize(j.date) === iso)
 }
 
 export interface DayPoint {
   date: Date
-  cigs: number | null
-  craving: number | null
+  pickups: number | null
+  urge: number | null
+  mood: number | null
 }
 
 export function lastNDays(journals: Journal[], n: number): DayPoint[] {
-  const byDay = groupByDay(journals)
   const today = startOfDay(new Date())
   return Array.from({ length: n }, (_, i) => {
     const date = addDays(today, i - n + 1)
-    const list = byDay.get(toISODate(date))
-    if (!list) return { date, cigs: null, craving: null }
-    return {
-      date,
-      cigs: list.reduce((s, j) => s + j.cigsSmoked, 0),
-      craving: list.reduce((s, j) => s + j.cravingIntensity, 0) / list.length,
-    }
+    const j = findByDate(journals, toISODate(date))
+    return j ? { date, pickups: j.pickups, urge: j.urgeLevel, mood: j.mood } : { date, pickups: null, urge: null, mood: null }
   })
 }
 
@@ -90,22 +88,33 @@ export function sortByDateDesc(journals: Journal[]): Journal[] {
   })
 }
 
-export const money = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: n >= 1000 ? 0 : 2 })
+export const MOODS = [
+  { value: 1, emoji: '😞', label: 'Rough' },
+  { value: 2, emoji: '😕', label: 'Low' },
+  { value: 3, emoji: '😐', label: 'Okay' },
+  { value: 4, emoji: '🙂', label: 'Good' },
+  { value: 5, emoji: '😄', label: 'Great' },
+]
 
-export function cravingLabel(n: number): string {
-  if (n <= 2) return 'Calm'
+export const moodOf = (n: number) => MOODS[Math.min(5, Math.max(1, Math.round(n))) - 1]
+
+export function urgeLabel(n: number): string {
+  if (n <= 2) return 'Barely there'
   if (n <= 4) return 'Mild'
   if (n <= 6) return 'Noticeable'
   if (n <= 8) return 'Strong'
-  return 'Intense'
+  return 'Constant pull'
 }
 
-/** Colour for a craving level, from sage (calm) to cranberry (intense). */
-export function cravingColor(n: number): string {
+/** Colour for an urge level, from sage (calm) to coral (strong). */
+export function urgeColor(n: number): string {
   if (n <= 2) return 'var(--sage)'
   if (n <= 4) return 'var(--olive)'
   if (n <= 6) return 'var(--amber)'
   if (n <= 8) return 'var(--coral)'
-  return 'var(--accent)'
+  return 'var(--rose)'
+}
+
+export function firstLine(j: Journal): string {
+  return (j.dayReflection || j.win || j.gratitude || j.improvement || '').split('\n')[0]
 }

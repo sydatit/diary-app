@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Ban, Flame, PenLine, PiggyBank, Sparkles, Wind } from 'lucide-react'
+import { Flame, Heart, PenLine, ShieldCheck, Smartphone, Sparkles, Star, Waves } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { useJournals } from '../lib/useJournals'
-import { computeStats, cravingLabel, lastNDays, money } from '../lib/stats'
+import { computeStats, findByDate, lastNDays, moodOf, urgeLabel } from '../lib/stats'
 import { fmt, parseDate, toISODate } from '../lib/date'
 import { TrendChart } from '../components/TrendChart'
 import { EntryCard } from '../components/EntryCard'
@@ -17,20 +17,21 @@ function greeting() {
   return 'Good evening'
 }
 
-const MILESTONES = [1, 3, 7, 14, 30, 60, 90, 180, 365]
+const MILESTONES = [1, 3, 7, 14, 21, 30, 60, 90, 180, 365]
 
 export default function Dashboard() {
   const { profile } = useAuth()
   const { journals, loading, error } = useJournals()
   if (!profile) return null
 
-  const stats = computeStats(profile, journals)
-  const today = toISODate()
-  const loggedToday = journals.find((j) => parseDate(j.date) && toISODate(parseDate(j.date)!) === today)
-  const nextMilestone = MILESTONES.find((m) => m > stats.daysFree) ?? Math.ceil((stats.daysFree + 1) / 365) * 365
-  const prevMilestone = [...MILESTONES].reverse().find((m) => m <= stats.daysFree) ?? 0
-  const progress = (stats.daysFree - prevMilestone) / (nextMilestone - prevMilestone)
-  const quit = parseDate(profile.quitDate)
+  const s = computeStats(profile, journals)
+  const goal = profile.dailyPickupGoal
+  const todayEntry = findByDate(journals, toISODate())
+  const nextMilestone = MILESTONES.find((m) => m > s.dayNumber) ?? Math.ceil((s.dayNumber + 1) / 365) * 365
+  const prevMilestone = [...MILESTONES].reverse().find((m) => m <= s.dayNumber) ?? 0
+  const progress = (s.dayNumber - prevMilestone) / (nextMilestone - prevMilestone)
+  const start = parseDate(profile.detoxStartDate)
+  const highlight = journals.find((j) => j.gratitude || j.win)
 
   return (
     <div className="page">
@@ -45,22 +46,22 @@ export default function Dashboard() {
 
       <section className="hero card">
         <div className="hero-main">
-          {stats.started ? (
+          {s.started ? (
             <>
-              <span className="hero-number">{stats.daysFree}</span>
+              <span className="hero-number">{s.dayNumber}</span>
               <div>
-                <p className="hero-label">{stats.daysFree === 1 ? 'day' : 'days'} smoke-free</p>
-                <p className="muted small">Since {quit ? fmt.medium(quit) : '—'}</p>
+                <p className="hero-label">{s.dayNumber === 1 ? 'Day one' : 'days'} of unplugging</p>
+                <p className="muted small">Since {start ? fmt.medium(start) : '—'}</p>
               </div>
             </>
           ) : (
             <div>
-              <p className="hero-label">Your quit date is coming up</p>
-              <p className="muted small">{quit ? `Starting ${fmt.medium(quit)}` : 'Set a quit date in Settings.'}</p>
+              <p className="hero-label">Your detox starts soon</p>
+              <p className="muted small">{start ? `Starting ${fmt.medium(start)}` : 'Set a start date in Settings.'}</p>
             </div>
           )}
         </div>
-        {stats.started && (
+        {s.started && (
           <div className="milestone">
             <div className="milestone-text">
               <span>Next milestone</span>
@@ -71,32 +72,42 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-        {!loggedToday ? (
+        {!todayEntry ? (
           <Link to="/journal/new" className="btn btn-primary hero-cta">
             <PenLine size={16} />
-            <span>How are you today?</span>
+            <span>Reflect on today</span>
           </Link>
         ) : (
-          <Link to={`/journal/${loggedToday.journalId}`} className="hero-done">
-            <Sparkles size={16} /> You've checked in today
+          <Link to={`/journal/${todayEntry.journalId}`} className="hero-done">
+            <Sparkles size={16} /> You've reflected today
           </Link>
         )}
       </section>
 
       <section className="stats">
-        <Stat icon={<PiggyBank size={18} />} label="Money saved" value={money(stats.moneySaved)} />
-        <Stat icon={<Ban size={18} />} label="Cigarettes avoided" value={Math.round(stats.cigsAvoided).toLocaleString()} />
         <Stat
-          icon={<Wind size={18} />}
-          label="Avg craving · 7 days"
-          value={stats.avgCraving7 == null ? '—' : stats.avgCraving7.toFixed(1)}
-          sub={stats.avgCraving7 == null ? 'No entries yet' : cravingLabel(stats.avgCraving7)}
+          icon={<Smartphone size={18} />}
+          label="Avg pickups · 7 days"
+          value={s.avgPickups7 == null ? '—' : Math.round(s.avgPickups7).toString()}
+          sub={goal ? `Goal ${goal} · met ${s.goalDays7}/${s.entries7} days` : undefined}
+        />
+        <Stat
+          icon={<ShieldCheck size={18} />}
+          label="Pickups resisted"
+          value={s.pickupsAvoided.toLocaleString()}
+          sub={`vs. your ${profile.baselinePickups}/day before`}
+        />
+        <Stat
+          icon={<Waves size={18} />}
+          label="Avg urge · 7 days"
+          value={s.avgUrge7 == null ? '—' : s.avgUrge7.toFixed(1)}
+          sub={s.avgUrge7 == null ? 'No entries yet' : urgeLabel(s.avgUrge7)}
         />
         <Stat
           icon={<Flame size={18} />}
-          label="Check-in streak"
-          value={String(stats.streak)}
-          sub={stats.streak === 1 ? 'smoke-free day logged' : 'smoke-free days logged'}
+          label="Reflection streak"
+          value={String(s.streak)}
+          sub={s.avgMood7 == null ? (s.streak === 1 ? 'day' : 'days') : `Mood lately ${moodOf(s.avgMood7).emoji}`}
         />
       </section>
 
@@ -111,27 +122,54 @@ export default function Dashboard() {
             <Spinner />
           </div>
         ) : (
-          <TrendChart data={lastNDays(journals, 14)} />
+          <TrendChart data={lastNDays(journals, 14)} goal={goal} />
         )}
       </section>
 
+      {highlight && (
+        <section className="highlights">
+          {highlight.gratitude && (
+            <div className="card highlight">
+              <span className="highlight-icon">
+                <Heart size={16} />
+              </span>
+              <div>
+                <p className="eyebrow">Grateful for · {fmt.short(parseDate(highlight.date)!)}</p>
+                <p className="highlight-text">{highlight.gratitude}</p>
+              </div>
+            </div>
+          )}
+          {highlight.win && (
+            <div className="card highlight">
+              <span className="highlight-icon">
+                <Star size={16} />
+              </span>
+              <div>
+                <p className="eyebrow">Did well · {fmt.short(parseDate(highlight.date)!)}</p>
+                <p className="highlight-text">{highlight.win}</p>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       <section>
         <div className="section-head">
-          <h2>Recent entries</h2>
+          <h2>Recent reflections</h2>
           {journals.length > 0 && <Link to="/journal">View all</Link>}
         </div>
         {loading ? null : journals.length === 0 ? (
           <div className="card soft center-pad">
-            <p className="muted">Your journal is empty. Your first entry starts the story.</p>
+            <p className="muted">No reflections yet. Take two minutes tonight to write your first.</p>
             <Link to="/journal/new" className="btn btn-secondary">
               <PenLine size={16} />
-              <span>Write first entry</span>
+              <span>Write first reflection</span>
             </Link>
           </div>
         ) : (
           <div className="entries">
             {journals.slice(0, 3).map((j) => (
-              <EntryCard key={j.journalId} entry={j} />
+              <EntryCard key={j.journalId} entry={j} goal={goal} />
             ))}
           </div>
         )}

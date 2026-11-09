@@ -9,6 +9,6 @@ export const journalsApi = {
   create: async (userId: string, input: JournalInput) =>
     (await api<Wrapped<Journal>>(base(userId), { method: 'POST', body: input })).data,
   update: (userId: string, id: number, input: JournalInput) =>
-    api(`${base(userId)}/${id}`, { method: 'PUT', body: { ...input, journalId: id, userId } }),
+    api(`${base(userId)}/${id}`, { method: 'PUT', body: input }),
   remove: (userId: string, id: number) => api(`${base(userId)}/${id}`, { method: 'DELETE' }),
 }

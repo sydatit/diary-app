@@ -1,20 +1,19 @@
 export interface UserProfile {
   userId: string
   userName: string
-  quitDate: string | null
-  avgSmokedDaily: number
-  pricePerPack: number
-  cigsPerPack: number
+  email: string
+  detoxStartDate: string | null
+  baselinePickups: number
+  dailyPickupGoal: number
 }
 
-export interface Habits {
-  quitDate: string
-  avgSmokedDaily: number
-  pricePerPack: number
-  cigsPerPack: number
+export interface DetoxSetup {
+  detoxStartDate: string
+  baselinePickups: number
+  dailyPickupGoal: number
 }
 
-export interface RegisterInput extends Habits {
+export interface RegisterInput extends DetoxSetup {
   email: string
   userName: string
   password: string
@@ -23,16 +22,28 @@ export interface RegisterInput extends Habits {
 export interface Journal {
   journalId: number
   date: string
-  cravingIntensity: number
-  cigsSmoked: number
-  notes: string | null
+  mood: number
+  urgeLevel: number
+  pickups: number
+  dayReflection: string | null
+  gratitude: string | null
+  win: string | null
+  improvement: string | null
   userId: string
 }
 
-export type JournalInput = Pick<Journal, 'date' | 'cravingIntensity' | 'cigsSmoked' | 'notes'>
+export type JournalInput = Pick<
+  Journal,
+  'date' | 'mood' | 'urgeLevel' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
+>
 
 export interface Wrapped<T> {
   status: string
   message: string
   data: T
+}
+
+export interface AuthResult {
+  token: string
+  userId: string
 }

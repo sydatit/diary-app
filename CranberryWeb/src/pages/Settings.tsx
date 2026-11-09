@@ -2,22 +2,21 @@ import { useState, type FormEvent } from 'react'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
-import { HabitsFields } from '../components/HabitsFields'
+import { DetoxFields } from '../components/DetoxFields'
 import { Button } from '../components/Button'
 import { Modal } from '../components/Modal'
 import { Alert } from '../components/Alert'
 import { useToast } from '../components/Toast'
 import { normalizeDate, toISODate } from '../lib/date'
-import type { Habits } from '../types'
+import type { DetoxSetup } from '../types'
 
 export default function Settings() {
   const { profile, userId, refreshProfile, signOut } = useAuth()
   const toast = useToast()
-  const [habits, setHabits] = useState<Habits>(() => ({
-    quitDate: normalizeDate(profile?.quitDate) || toISODate(),
-    avgSmokedDaily: profile?.avgSmokedDaily ?? 0,
-    pricePerPack: profile?.pricePerPack ?? 0,
-    cigsPerPack: profile?.cigsPerPack ?? 0,
+  const [setup, setSetup] = useState<DetoxSetup>(() => ({
+    detoxStartDate: normalizeDate(profile?.detoxStartDate) || toISODate(),
+    baselinePickups: profile?.baselinePickups ?? 0,
+    dailyPickupGoal: profile?.dailyPickupGoal ?? 0,
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +31,7 @@ export default function Settings() {
     setSaving(true)
     setError(null)
     try {
-      await usersApi.update(userId!, habits)
+      await usersApi.update(userId!, setup)
       await refreshProfile()
       toast('Settings saved')
     } catch (err) {
@@ -68,7 +67,7 @@ export default function Settings() {
           <span className="avatar lg">{profile.userName[0]?.toUpperCase()}</span>
           <div className="grow">
             <strong>{profile.userName}</strong>
-            <p className="muted small">Signed in</p>
+            <p className="muted small">{profile.email}</p>
           </div>
           <Button variant="secondary" icon={<LogOut size={16} />} onClick={signOut}>
             Sign out
@@ -78,11 +77,11 @@ export default function Settings() {
 
       <form className="card stack" onSubmit={save}>
         <div>
-          <h2>Smoking habits</h2>
-          <p className="muted small">Used to calculate money saved and cigarettes avoided.</p>
+          <h2>Detox setup</h2>
+          <p className="muted small">Used for your goal tracking and the pickups-resisted count.</p>
         </div>
         <Alert>{error}</Alert>
-        <HabitsFields value={habits} onChange={setHabits} />
+        <DetoxFields value={setup} onChange={setSetup} />
         <div className="row end">
           <Button type="submit" loading={saving}>
             Save changes
@@ -93,7 +92,7 @@ export default function Settings() {
       <section className="card danger-zone">
         <div className="grow">
           <h2>Delete account</h2>
-          <p className="muted small">Permanently remove your account and all journal entries.</p>
+          <p className="muted small">Permanently remove your account and all reflections.</p>
         </div>
         <Button variant="danger" onClick={() => setConfirmOpen(true)}>
           Delete account

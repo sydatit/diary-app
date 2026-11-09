@@ -1,15 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { useAuth } from '../auth/AuthContext'
 import { usersApi } from '../api/users'
 import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
-import { HabitsFields } from '../components/HabitsFields'
+import { DetoxFields } from '../components/DetoxFields'
 import { AuthLayout } from './AuthLayout'
 import { toISODate } from '../lib/date'
-import type { Habits } from '../types'
+import type { DetoxSetup } from '../types'
 
 const PASSWORD_RULES: [RegExp, string][] = [
   [/.{6,}/, '6+ characters'],
@@ -20,13 +19,12 @@ const PASSWORD_RULES: [RegExp, string][] = [
 ]
 
 export default function Register() {
-  const { signIn } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState<1 | 2>(1)
   const [email, setEmail] = useState('')
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
-  const [habits, setHabits] = useState<Habits>({ quitDate: toISODate(), avgSmokedDaily: 10, pricePerPack: 0, cigsPerPack: 20 })
+  const [setup, setSetup] = useState<DetoxSetup>({ detoxStartDate: toISODate(), baselinePickups: 80, dailyPickupGoal: 40 })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -48,12 +46,15 @@ export default function Register() {
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (setup.dailyPickupGoal > setup.baselinePickups) {
+      setError('Your goal should be lower than your current pickups.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      await usersApi.register({ email: email.trim(), userName: userName.trim(), password, ...habits })
-      await signIn(email.trim(), password)
-      navigate('/', { replace: true })
+      await usersApi.register({ email: email.trim(), userName: userName.trim(), password, ...setup })
+      navigate('/verify', { state: { email: email.trim(), sent: true } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account.')
       setBusy(false)
@@ -62,8 +63,8 @@ export default function Register() {
 
   return (
     <AuthLayout
-      title={step === 1 ? 'Create your account' : 'Your smoking habits'}
-      subtitle={step === 1 ? 'Step 1 of 2 · The basics' : 'Step 2 of 2 · So we can measure your progress'}
+      title={step === 1 ? 'Create your account' : 'Set your starting point'}
+      subtitle={step === 1 ? 'Step 1 of 2 · The basics' : 'Step 2 of 2 · So we can show your progress'}
       footer={
         <>
           Already have an account? <Link to="/signin">Sign in</Link>
@@ -77,7 +78,16 @@ export default function Register() {
       {step === 1 ? (
         <form onSubmit={next} className="stack">
           <Alert>{error}</Alert>
-          <Field label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+          <Field
+            label="Email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus
+            hint="We'll send a 6-digit code here to activate your account."
+          />
           <Field label="Username" autoComplete="username" required value={userName} onChange={(e) => setUserName(e.target.value)} />
           <Field
             label="Password"
@@ -103,7 +113,7 @@ export default function Register() {
       ) : (
         <form onSubmit={submit} className="stack">
           <Alert>{error}</Alert>
-          <HabitsFields value={habits} onChange={setHabits} />
+          <DetoxFields value={setup} onChange={setSetup} />
           <div className="row">
             <Button type="button" variant="secondary" icon={<ArrowLeft size={16} />} onClick={() => setStep(1)} disabled={busy}>
               Back
