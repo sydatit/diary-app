@@ -18,3 +18,22 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  web:
+    build:
+      context: ./CranberryWeb
+      dockerfile: Dockerfile
+    image: cranberry-web:latest
+    container_name: cranberry-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Frontend (nginx). /api/* được proxy sang service `api` trong cùng network.
+      # Port 80 trên host đang bị dùng bởi project khác -> mặc định 3000.
+      - "${WEB_PORT:-3000}:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

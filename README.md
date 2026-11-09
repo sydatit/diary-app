@@ -818,3 +818,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------
 
 <center><a href="#--cranberry-api">Return to Top</a></center>
+------------------------------
+### Frontend (CranberryWeb)
+
+A React + Vite + TypeScript frontend lives in `CranberryWeb/`.
+
+**Docker (recommended)** — `docker compose up -d --build` starts both services:
+* `web` → http://localhost:3000 (nginx serves the SPA and proxies `/api/*` to the `api` service, so no CORS setup is needed). Change the host port with `WEB_PORT=8081 docker compose up -d`.
+* `api` → http://localhost:8080
+
+**Local dev** (Node 20+):
+```bash
+cd CranberryWeb
+npm install
+npm run dev          # http://localhost:5173, proxies /api -> http://localhost:8080
+# VITE_PROXY_TARGET=http://<host>:8080 npm run dev   # point at another API
+```
