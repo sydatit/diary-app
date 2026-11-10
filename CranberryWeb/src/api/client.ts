@@ -64,7 +64,9 @@ function extractMessage(body: unknown, status: number): string {
 
 export async function api<T = void>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  // FormData goes as-is: the browser sets multipart Content-Type with its boundary.
+  const isForm = options.body instanceof FormData
+  if (options.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   const token = session.token
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -73,7 +75,7 @@ export async function api<T = void>(path: string, options: { method?: string; bo
     res = await fetch(`${BASE}${path}`, {
       method: options.method ?? 'GET',
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: isForm ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,
     })
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Check your connection.')
