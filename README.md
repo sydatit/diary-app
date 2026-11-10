@@ -840,3 +840,5 @@ npm install
 npm run dev          # http://localhost:5173, proxies /api -> http://localhost:8080
 # VITE_PROXY_TARGET=http://<host>:8080 npm run dev   # point at another API
 ```
+
+**Vercel** — import the repo in Vercel with **Root Directory = `CranberryWeb`** (framework: Vite, no env vars needed). `CranberryWeb/vercel.json` rewrites `/api/*` to the API on the Oracle server (`http://129.221.218.89:8080`) server-side, so the browser stays on HTTPS with same-origin requests (no CORS, no mixed content). Update the IP in `vercel.json` if the server changes.
