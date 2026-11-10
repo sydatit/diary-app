@@ -12,9 +12,9 @@ public class RegisterDto
   [Required]
   public string Password { get; set; }
 
-  public string QuitDate { get; set; }
-  public int AvgSmokedDaily { get; set; }
-  public float PricePerPack { get; set; }
-  public int CigsPerPack { get; set; }
-
+  public string DetoxStartDate { get; set; }
+  [Range(0, 2000)]
+  public int BaselinePickups { get; set; }
+  [Range(0, 2000)]
+  public int DailyPickupGoal { get; set; }
 }

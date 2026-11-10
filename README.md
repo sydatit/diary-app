@@ -818,3 +818,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ------------------------------
 
 <center><a href="#--cranberry-api">Return to Top</a></center>
+------------------------------
+### Unplug — phone-detox journal (CranberryWeb)
+
+The app is now **Unplug**, a daily journal for breaking phone addiction. Each day you log mood (1–5), how strong the urge to grab your phone was (1–10), phone pickups, and four short reflections: *How was today? · What am I grateful for? · What did I do well? · One thing to improve.* The dashboard tracks days unplugged, pickups vs. your goal, pickups resisted, urge trend and your reflection streak.
+
+Sign-up requires **email verification**: the API emails a 6-digit code (Gmail SMTP, `Email__*` settings), valid 15 min, max 5 attempts, resend cooldown 60 s. Accounts can't sign in until verified.
+
+New/changed endpoints: `POST /api/users/register` (sends code) · `POST /api/users/verify-email` `{email, code}` → `{token, userId}` · `POST /api/users/resend-code` `{email}` · `POST /api/users/signin` returns 403 `EmailNotConfirmed` for unverified accounts. One journal entry per user per day (409 on duplicates). The unauthenticated `/api/journals` controller was removed.
+
+A React + Vite + TypeScript frontend lives in `CranberryWeb/`.
+
+**Docker (recommended)** — `docker compose up -d --build` starts both services:
+* `web` → http://localhost:3000 (nginx serves the SPA and proxies `/api/*` to the `api` service, so no CORS setup is needed). Change the host port with `WEB_PORT=8081 docker compose up -d`.
+* `api` → http://localhost:8080
+
+**Local dev** (Node 20+):
+```bash
+cd CranberryWeb
+npm install
+npm run dev          # http://localhost:5173, proxies /api -> http://localhost:8080
+# VITE_PROXY_TARGET=http://<host>:8080 npm run dev   # point at another API
+```

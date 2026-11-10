@@ -10,12 +10,12 @@ public class EmailSettings
   public int Port { get; set; } = 587;
   public string Username { get; set; }   // địa chỉ Gmail gửi đi
   public string Password { get; set; }   // Gmail App Password (16 ký tự)
-  public string SenderName { get; set; } = "Cranberry API";
+  public string SenderName { get; set; } = "Unplug";
 }
 
 public interface IEmailService
 {
-  Task SendAsync(string to, string subject, string body);
+  Task SendAsync(string to, string subject, string body, string htmlBody = null);
 }
 
 public class EmailService : IEmailService
@@ -27,7 +27,7 @@ public class EmailService : IEmailService
     _settings = options.Value;
   }
 
-  public async Task SendAsync(string to, string subject, string body)
+  public async Task SendAsync(string to, string subject, string body, string htmlBody = null)
   {
     if (string.IsNullOrWhiteSpace(_settings.Username) || string.IsNullOrWhiteSpace(_settings.Password))
     {
@@ -42,6 +42,12 @@ public class EmailService : IEmailService
       IsBodyHtml = false
     };
     message.To.Add(to);
+
+    // Optional HTML version; `body` stays as the plain-text fallback.
+    if (!string.IsNullOrEmpty(htmlBody))
+    {
+      message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(htmlBody, System.Text.Encoding.UTF8, "text/html"));
+    }
 
     using var client = new SmtpClient(_settings.Host, _settings.Port)
     {

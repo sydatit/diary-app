@@ -25,6 +25,7 @@ builder.Services.AddControllers();
 
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IVerificationService, VerificationService>();
 
 builder.Services.AddDbContext<CranberryAPIContext>(
                   dbContextOptions => dbContextOptions
@@ -35,7 +36,12 @@ builder.Services.AddDbContext<CranberryAPIContext>(
                   )
                 );
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+  {
+    options.User.RequireUniqueEmail = true;
+    // Accounts stay inactive until the emailed code is verified.
+    options.SignIn.RequireConfirmedEmail = true;
+  })
 	.AddEntityFrameworkStores<CranberryAPIContext>()
   .AddDefaultTokenProviders();
 

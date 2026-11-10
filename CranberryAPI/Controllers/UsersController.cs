@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using System.Text;
+using System.Net.Mail;
 using System.Security.Claims;
+using System.Text;
 using CranberryAPI.Models;
+using CranberryAPI.Services;
 using CranberryAPI.Wrappers;
 
 namespace CranberryAPI.Controllers;
@@ -17,85 +19,183 @@ public class UsersController : ControllerBase
 {
   private readonly CranberryAPIContext _db;
   private readonly UserManager<ApplicationUser> _userManager;
-  private readonly SignInManager<ApplicationUser> _signInManager;
+  private readonly IVerificationService _verification;
   private readonly IConfiguration _configuration;
+  private readonly ILogger<UsersController> _logger;
 
-  public UsersController(CranberryAPIContext db, UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, IConfiguration configuration)
+  public UsersController(
+    CranberryAPIContext db,
+    UserManager<ApplicationUser> userManager,
+    IVerificationService verification,
+    IConfiguration configuration,
+    ILogger<UsersController> logger)
   {
     _db = db;
     _userManager = userManager;
-    _signInManager = signInManager;
+    _verification = verification;
     _configuration = configuration;
+    _logger = logger;
   }
+
+  private string CurrentUserId => User.FindFirst("userId")?.Value;
 
   // ## # # # # # # # # # # # # # # ##
   // # USER AUTHENTICATION ENDPOINTS #
   // ## # # # # # # # # # # # # # # ##
 
   // POST: api/users/register
+  // Creates an inactive account and emails a 6-digit verification code.
+  // Re-registering an email that was never verified updates that pending account and sends a new code.
   [HttpPost("register")]
-  public async Task<IActionResult> Register([FromBody] RegisterDto user)
+  public async Task<IActionResult> Register([FromBody] RegisterDto dto)
   {
-    // Check if these credentials have already been registered.
-    // If so, return error; otherwise continue.
-    ApplicationUser userExists = await _userManager.FindByEmailAsync(user.Email);
-    if (userExists != null)
+    string email = dto.Email.Trim();
+    ApplicationUser user = await _userManager.FindByEmailAsync(email);
+
+    if (user != null && user.EmailConfirmed)
     {
       return BadRequest(new { status = "Error", message = "Email is already registered." });
     }
 
-    // ApplicationUser newUser = new ApplicationUser() { Email = user.Email, UserName = user.UserName };
-    ApplicationUser newUser = new ApplicationUser() 
-    { 
-      Email = user.Email, 
-      UserName = user.UserName,
-      QuitDate = user.QuitDate,
-      AvgSmokedDaily = user.AvgSmokedDaily,
-      PricePerPack = user.PricePerPack,
-      CigsPerPack = user.CigsPerPack
-    };
-
-    IdentityResult result = await _userManager.CreateAsync(newUser, user.Password);
-
-    if (result.Succeeded)
+    if (user != null)
     {
-      return Ok(new { status = "Success", message = $"User {user.UserName} has been successfully created." });
+      int wait = _verification.CooldownRemaining(user);
+      if (wait > 0)
+      {
+        return StatusCode(429, new { status = "Error", message = $"Please wait {wait}s before requesting a new code.", retryAfter = wait });
+      }
+
+      // Pending account: refresh its details with what the user just submitted.
+      IdentityResult nameResult = await _userManager.SetUserNameAsync(user, dto.UserName.Trim());
+      if (!nameResult.Succeeded) return BadRequest(nameResult.Errors);
+
+      IdentityResult pwdResult = await _userManager.RemovePasswordAsync(user);
+      if (pwdResult.Succeeded) pwdResult = await _userManager.AddPasswordAsync(user, dto.Password);
+      if (!pwdResult.Succeeded) return BadRequest(pwdResult.Errors);
+
+      ApplyHabits(user, dto.DetoxStartDate, dto.BaselinePickups, dto.DailyPickupGoal);
+      await _userManager.UpdateAsync(user);
     }
     else
     {
-      return BadRequest(result.Errors);
+      user = new ApplicationUser
+      {
+        Email = email,
+        UserName = dto.UserName.Trim(),
+        EmailConfirmed = false,
+      };
+      ApplyHabits(user, dto.DetoxStartDate, dto.BaselinePickups, dto.DailyPickupGoal);
+
+      IdentityResult result = await _userManager.CreateAsync(user, dto.Password);
+      if (!result.Succeeded) return BadRequest(result.Errors);
     }
+
+    IActionResult sendError = await TrySendCode(user);
+    if (sendError != null) return sendError;
+
+    return Ok(new { status = "Success", message = $"We sent a verification code to {email}.", email });
+  }
+
+  // POST: api/users/verify-email
+  [HttpPost("verify-email")]
+  public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
+  {
+    ApplicationUser user = await _userManager.FindByEmailAsync(dto.Email.Trim());
+    if (user == null)
+    {
+      return BadRequest(new { status = "Error", code = "Invalid", message = "That code isn't right. Please check and try again." });
+    }
+
+    VerifyResult result = await _verification.VerifyAsync(user, dto.Code);
+    switch (result)
+    {
+      case VerifyResult.Success:
+        return Ok(new { status = "Success", message = "Email verified.", token = CreateToken(user), userId = user.Id });
+      case VerifyResult.AlreadyVerified:
+        // Never hand out a token here: the code was not checked.
+        return BadRequest(new { status = "Error", code = "AlreadyVerified", message = "This email is already verified. Please sign in." });
+      case VerifyResult.Expired:
+        return BadRequest(new { status = "Error", code = "Expired", message = "This code has expired. Request a new one." });
+      case VerifyResult.TooManyAttempts:
+        return BadRequest(new { status = "Error", code = "TooManyAttempts", message = "Too many incorrect attempts. Request a new code." });
+      default:
+        return BadRequest(new { status = "Error", code = "Invalid", message = "That code isn't right. Please check and try again." });
+    }
+  }
+
+  // POST: api/users/resend-code
+  [HttpPost("resend-code")]
+  public async Task<IActionResult> ResendCode([FromBody] ResendCodeDto dto)
+  {
+    var ok = new { status = "Success", message = "If that email is waiting for verification, a new code is on its way." };
+    ApplicationUser user = await _userManager.FindByEmailAsync(dto.Email.Trim());
+    if (user == null || user.EmailConfirmed) return Ok(ok);
+
+    int wait = _verification.CooldownRemaining(user);
+    if (wait > 0)
+    {
+      return StatusCode(429, new { status = "Error", message = $"Please wait {wait}s before requesting a new code.", retryAfter = wait });
+    }
+
+    IActionResult sendError = await TrySendCode(user);
+    return sendError ?? Ok(ok);
   }
 
   // POST: api/users/signin
   [HttpPost("signin")]
-  public async Task<IActionResult> SignIn(SignInDto userInfo) 
+  public async Task<IActionResult> SignIn(SignInDto userInfo)
   {
-    ApplicationUser user = await _userManager.FindByEmailAsync(userInfo.Email);
+    ApplicationUser user = await _userManager.FindByEmailAsync(userInfo.Email.Trim());
 
-    if (user != null)
+    if (user != null && await _userManager.CheckPasswordAsync(user, userInfo.Password))
     {
-      var signInResult = await _signInManager.PasswordSignInAsync(user, userInfo.Password, isPersistent: false, lockoutOnFailure: false);
-      if (signInResult.Succeeded)
+      if (!user.EmailConfirmed)
       {
-        List<Claim> authClaims = new List<Claim>
+        return StatusCode(403, new
         {
-          new Claim("userId", user.Id),
-          new Claim("userName", user.UserName)
-        };
-
-        var newToken = CreateToken(authClaims);
-
-        return Ok(new { status = "Success", message = $"{userInfo.Email} signed in.", token = newToken, userId = user.Id });
+          status = "Error",
+          code = "EmailNotConfirmed",
+          message = "Please verify your email before signing in.",
+          email = user.Email
+        });
       }
+
+      return Ok(new { status = "Success", message = $"{userInfo.Email} signed in.", token = CreateToken(user), userId = user.Id });
     }
 
     return BadRequest(new { status = "Error", message = "Unable to sign in." });
   }
 
-  // Generate a user's Token
-  private string CreateToken(List<Claim> authClaims)
+  private async Task<IActionResult> TrySendCode(ApplicationUser user)
   {
+    try
+    {
+      await _verification.IssueCodeAsync(user);
+      return null;
+    }
+    catch (Exception ex) when (ex is SmtpException || ex is InvalidOperationException)
+    {
+      _logger.LogError(ex, "Failed to send verification code to {Email}", user.Email);
+      return StatusCode(502, new { status = "Error", message = "We couldn't send the verification email. Please try again in a moment." });
+    }
+  }
+
+  private static void ApplyHabits(ApplicationUser user, string startDate, int? baseline, int? goal)
+  {
+    if (!string.IsNullOrWhiteSpace(startDate)) user.DetoxStartDate = startDate;
+    if (baseline.HasValue && baseline.Value > 0) user.BaselinePickups = baseline.Value;
+    if (goal.HasValue && goal.Value > 0) user.DailyPickupGoal = goal.Value;
+  }
+
+  // Generate a user's Token
+  private string CreateToken(ApplicationUser user)
+  {
+    List<Claim> authClaims = new List<Claim>
+    {
+      new Claim("userId", user.Id),
+      new Claim("userName", user.UserName)
+    };
+
     SymmetricSecurityKey authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
 
     JwtSecurityToken token = new JwtSecurityToken(
@@ -106,7 +206,6 @@ public class UsersController : ControllerBase
       signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
     );
 
-    // Serialize and return our newly created Token:
     return new JwtSecurityTokenHandler().WriteToken(token);
   }
 
@@ -117,72 +216,27 @@ public class UsersController : ControllerBase
   // GET: api/users/{id}
   [HttpGet("{id}")]
   [Authorize]
-  public async Task<ActionResult> GetUserData(string id) {
-
-    string currentUserId = User.FindFirst("userId")?.Value;
+  public async Task<ActionResult> GetUserData(string id)
+  {
     ApplicationUser user = await _userManager.FindByIdAsync(id);
+    if (user == null || CurrentUserId != id) return NotFound();
 
-    // check if requested user exists, 
-    // or if the client isn't requesting their own information
-    if (user == null || currentUserId != id)
+    return Ok(new Response<UserProfileDto>
     {
-      return NotFound();
-    }
-
-    UserProfileDto userDto = new()
-    {
-      UserId = user.Id,
-      UserName = user.UserName,
-      QuitDate = user.QuitDate,
-      AvgSmokedDaily = user.AvgSmokedDaily,
-      PricePerPack = user.PricePerPack,
-      CigsPerPack = user.CigsPerPack,
-      // Journals = user.Journals
-    };
-
-    var response = new Response<UserProfileDto> {
       Status = "Success",
       Message = "User info retrieved successfully.",
-      Data = userDto
-    };
-
-    return Ok(response);
-
+      Data = UserProfileDto.From(user)
+    });
   }
 
   // GET: api/users/profile
   [HttpGet("profile")]
   [Authorize]
-  public async Task<ActionResult> GetUserProfile() {
-
-    // grab the user's id from the JWT
-    string currentUserId = User.FindFirst("userId")?.Value;
-  
-    ApplicationUser user = await _userManager.FindByIdAsync(currentUserId);
-
-    if (user == null)
-    {
-      return NotFound();
-    }
-
-    UserProfileDto userDto = new()
-    {
-      UserId = user.Id,
-      UserName = user.UserName,
-      QuitDate = user.QuitDate,
-      AvgSmokedDaily = user.AvgSmokedDaily,
-      PricePerPack = user.PricePerPack,
-      CigsPerPack = user.CigsPerPack,
-      // Journals = user.Journals
-    };
-
-  var response = new Response<UserProfileDto> {
-      Status = "Success",
-      Message = "User info retrieved successfully.",
-      Data = userDto
-    };
-
-    return Ok(userDto);
+  public async Task<ActionResult> GetUserProfile()
+  {
+    ApplicationUser user = await _userManager.FindByIdAsync(CurrentUserId);
+    if (user == null) return NotFound();
+    return Ok(UserProfileDto.From(user));
   }
 
   // PUT: api/users/{id}
@@ -191,43 +245,13 @@ public class UsersController : ControllerBase
   public async Task<IActionResult> UpdateUser(string id, [FromBody] UpdateUserDto userModel)
   {
     ApplicationUser user = await _userManager.FindByIdAsync(id);
-    string currentUserId = User.FindFirst("userId")?.Value;
+    if (user == null || CurrentUserId != id) return NotFound();
 
-    if (user == null || currentUserId != id)
-    {
-      return NotFound();
-    }
-    
-    // Error handling & Validation Checking should go here
-    // For now: if information is left out of the Put request body,
-    // do not update it
-    if (userModel.AvgSmokedDaily != default)
-    {
-      user.AvgSmokedDaily = userModel.AvgSmokedDaily;
-    }
-    if (userModel.CigsPerPack != default)
-    {
-      user.CigsPerPack = userModel.CigsPerPack;
-    }
-    if (userModel.PricePerPack != default)
-    {
-      user.PricePerPack = userModel.PricePerPack;
-    }
-    if (userModel.QuitDate != default)
-    {
-      user.QuitDate = userModel.QuitDate;
-    }
+    // Fields left out of the request body are not changed.
+    ApplyHabits(user, userModel.DetoxStartDate, userModel.BaselinePickups, userModel.DailyPickupGoal);
 
     IdentityResult result = await _userManager.UpdateAsync(user);
-
-    if (result.Succeeded)
-    {
-      return NoContent();
-    }
-    else
-    {
-      return BadRequest(result.Errors);
-    }
+    return result.Succeeded ? NoContent() : BadRequest(result.Errors);
   }
 
   // DELETE: api/users/{id}
@@ -235,33 +259,19 @@ public class UsersController : ControllerBase
   [Authorize]
   public async Task<IActionResult> DeleteUser(string id)
   {
-
-    // Get the ID of the authenticated user:
-    string currentUserId = User.FindFirst("userId")?.Value;
-
-    if (currentUserId != id)
-    { // instead of forbid, just don't acknowledge the data exists
-      return NotFound();
-    }
+    if (CurrentUserId != id) return NotFound();
 
     ApplicationUser user = await _userManager.FindByIdAsync(id);
+    if (user == null) return NotFound();
 
-    if (user != null)
-    {
-      IdentityResult result = await _userManager.DeleteAsync(user);
-      if (result.Succeeded)
-      {
-        return NoContent();
-      }
-      else
-      {
-        return BadRequest(result.Errors);
-      }
-    }
-    else
-    {
-      return NotFound();
-    }
+    // The Journals FK has no cascade, so remove the user's entries first.
+    await using var tx = await _db.Database.BeginTransactionAsync();
+    _db.Journals.RemoveRange(_db.Journals.Where(j => j.UserId == id));
+    await _db.SaveChangesAsync();
+
+    IdentityResult result = await _userManager.DeleteAsync(user);
+    if (result.Succeeded) await tx.CommitAsync();
+    return result.Succeeded ? NoContent() : BadRequest(result.Errors);
   }
 
   // ## # # # # # # # # # # # ##
@@ -273,138 +283,130 @@ public class UsersController : ControllerBase
   [Authorize]
   public async Task<ActionResult<IEnumerable<Journal>>> GetUserJournals(string id)
   {
-    List<Journal> userJournals = await _db.Journals.Where(j => j.UserId == id).ToListAsync();
+    if (CurrentUserId != id) return NotFound();
 
-    var response = new Response<List<Journal>> {
+    List<Journal> userJournals = await _db.Journals
+      .Where(j => j.UserId == id)
+      .OrderByDescending(j => j.Date)
+      .ToListAsync();
+
+    return Ok(new Response<List<Journal>>
+    {
       Status = "Success",
       Message = "Journals retrieved successfully.",
       Data = userJournals
-    };
-
-    return Ok(response);
+    });
   }
 
-  // GET: api/users/{id}/journals/{id}
+  // GET: api/users/{id}/journals/{journalId}
   [HttpGet("{id}/journals/{journalId}")]
   [Authorize]
   public async Task<IActionResult> GetUserJournal(string id, int journalId)
   {
-    // Make sure it's the client making the request
-    string currentUserId = User.FindFirst("userId")?.Value;
-    if (currentUserId != id)
-    { 
-      return NotFound();
-    }
-    
-    Journal journal = await _db.Journals.FirstOrDefaultAsync(journal => journal.JournalId == journalId && journal.UserId == id);
-    if (journal == null) 
-    {
-      return NotFound();
-    }
+    if (CurrentUserId != id) return NotFound();
 
-    var response = new Response<Journal> {
+    Journal journal = await _db.Journals.FirstOrDefaultAsync(j => j.JournalId == journalId && j.UserId == id);
+    if (journal == null) return NotFound();
+
+    return Ok(new Response<Journal>
+    {
       Status = "Success",
       Message = "Journal retrieved successfully.",
       Data = journal
-    };
-
-    return Ok(response);
+    });
   }
 
   // POST: api/users/{id}/journals
   [HttpPost("{id}/journals")]
   [Authorize]
-  public async Task<ActionResult<Journal>> PostJournal(string id, Journal journal)
+  public async Task<ActionResult<Journal>> PostJournal(string id, [FromBody] JournalInputDto input)
   {
-    // Make sure it's the client making the request
-    string currentUserId = User.FindFirst("userId")?.Value;
-    if (currentUserId != id)
-    { 
-      return Forbid();
+    if (CurrentUserId != id) return Forbid();
+
+    if (await _db.Journals.AnyAsync(j => j.UserId == id && j.Date == input.Date))
+    {
+      return DuplicateDate();
     }
 
-    journal.UserId = id;
-    // journal.Date = DateTime.Now;
+    Journal journal = new Journal { UserId = id };
+    Apply(journal, input);
     _db.Journals.Add(journal);
-    await _db.SaveChangesAsync();
 
-    var response = new Response<Journal> {
+    try
+    {
+      await _db.SaveChangesAsync();
+    }
+    catch (DbUpdateException)
+    {
+      return DuplicateDate();
+    }
+
+    var response = new Response<Journal>
+    {
       Status = "Success",
       Message = "Journal created successfully.",
       Data = journal
     };
-
-    return CreatedAtAction(nameof(GetUserJournal), new { id = id, journalId = journal.JournalId }, response);
+    return CreatedAtAction(nameof(GetUserJournal), new { id, journalId = journal.JournalId }, response);
   }
 
-  // PUT: api/users/{id}/journals/{id}
+  // PUT: api/users/{id}/journals/{journalId}
   [HttpPut("{id}/journals/{journalId}")]
   [Authorize]
-  public async Task<ActionResult> UpdateJournal(string id, int journalId, [FromBody] Journal journal)
+  public async Task<ActionResult> UpdateJournal(string id, int journalId, [FromBody] JournalInputDto input)
   {
-    // Make sure it's the client making the request
-    string currentUserId = User.FindFirst("userId")?.Value;
-    if (currentUserId != id)
-    { 
-      return Forbid();
-    }
-    if (journalId != journal.JournalId || id != journal.UserId)
-    {
-      return BadRequest();
-    }
-  
-    _db.Journals.Update(journal);
+    if (CurrentUserId != id) return Forbid();
 
-    try 
+    Journal journal = await _db.Journals.FirstOrDefaultAsync(j => j.JournalId == journalId && j.UserId == id);
+    if (journal == null) return NotFound();
+
+    if (input.Date != journal.Date &&
+        await _db.Journals.AnyAsync(j => j.UserId == id && j.Date == input.Date && j.JournalId != journalId))
+    {
+      return DuplicateDate();
+    }
+
+    Apply(journal, input);
+
+    try
     {
       await _db.SaveChangesAsync();
     }
-    catch (DbUpdateConcurrencyException)
+    catch (DbUpdateException)
     {
-      if (!JournalExists(journalId))
-      {
-        return NotFound();
-      }
-      else
-      {
-        throw;
-      }
+      return DuplicateDate();
     }
 
     return NoContent();
   }
 
-  private bool JournalExists(int id)
-  {
-    return _db.Journals.Any(j => j.JournalId == id);
-  }
-
-  // DELETE: api/users/{id}/journals/{id}
+  // DELETE: api/users/{id}/journals/{journalId}
   [HttpDelete("{id}/journals/{journalId}")]
   [Authorize]
   public async Task<IActionResult> DeleteJournal(string id, int journalId)
   {
-    // Make sure it's the client making the request
-    string currentUserId = User.FindFirst("userId")?.Value;
-    if (currentUserId != id)
-    { 
-      return NotFound();
-    }
+    if (CurrentUserId != id) return NotFound();
 
-    Journal journal = await _db.Journals.FindAsync(journalId);
-
-    if (journal == null)
-    {
-      return NotFound();
-    } 
-    else if (id != journal.UserId)
-    {
-      return BadRequest();
-    }
+    Journal journal = await _db.Journals.FirstOrDefaultAsync(j => j.JournalId == journalId && j.UserId == id);
+    if (journal == null) return NotFound();
 
     _db.Journals.Remove(journal);
     await _db.SaveChangesAsync();
-
     return NoContent();
+  }
+
+  private ObjectResult DuplicateDate() =>
+    Conflict(new { status = "Error", code = "DuplicateDate", message = "You already have an entry for this date." });
+
+  private static void Apply(Journal journal, JournalInputDto input)
+  {
+    journal.Date = input.Date;
+    journal.Mood = input.Mood;
+    journal.UrgeLevel = input.UrgeLevel;
+    journal.Pickups = input.Pickups;
+    journal.DayReflection = input.DayReflection?.Trim();
+    journal.Gratitude = input.Gratitude?.Trim();
+    journal.Win = input.Win?.Trim();
+    journal.Improvement = input.Improvement?.Trim();
   }
 }
