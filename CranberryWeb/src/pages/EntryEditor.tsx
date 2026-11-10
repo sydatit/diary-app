@@ -9,6 +9,7 @@ import { Stepper } from '../components/Stepper'
 import { UrgeSlider } from '../components/UrgeSlider'
 import { MoodPicker } from '../components/MoodPicker'
 import { AutoTextarea } from '../components/AutoTextarea'
+import { VoiceRecorder } from '../components/VoiceRecorder'
 import { Modal } from '../components/Modal'
 import { Alert } from '../components/Alert'
 import { FullPageSpinner } from '../components/Spinner'
@@ -78,6 +79,15 @@ export default function EntryEditor() {
   }, [id, isNew, userId, navigate])
 
   const set = <K extends keyof JournalInput>(k: K, v: JournalInput[K]) => setForm((f) => ({ ...f, [k]: v }))
+  // Voice summary: fill an empty reflection, otherwise append on a new line so the user can review before saving.
+  // Functional update keeps anything typed while the AI was working.
+  function addVoiceSummary(summary: string) {
+    setForm((f) => {
+      const cur = f.dayReflection ?? ''
+      return { ...f, dayReflection: cur.trim() ? `${cur.replace(/\s+$/, '')}\n${summary}` : summary }
+    })
+    toast('Đã thêm tóm tắt từ ghi âm')
+  }
   const clash = isNew ? findByDate(existing, form.date) : undefined
   const hasText = [form.dayReflection, form.gratitude, form.win, form.improvement].some((t) => (t ?? '').trim())
 
@@ -168,6 +178,7 @@ export default function EntryEditor() {
 
         <section className="card editor-section">
           <h2 className="editor-title">Reflection</h2>
+          <VoiceRecorder onSummary={addVoiceSummary} />
           <AutoTextarea
             label="How was today?"
             placeholder="What happened, how you spent your time, how the phone fit in…"

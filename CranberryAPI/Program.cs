@@ -27,6 +27,10 @@ builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Emai
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 
+builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection("Gemini"));
+builder.Services.AddHttpClient(GeminiAudioService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<IGeminiAudioService, GeminiAudioService>();
+
 builder.Services.AddDbContext<CranberryAPIContext>(
                   dbContextOptions => dbContextOptions
                     .UseMySql(
