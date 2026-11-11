@@ -30,8 +30,9 @@
   --shadow: 0 1px 2px rgba(60, 40, 20, 0.04), 0 4px 16px rgba(60, 40, 20, 0.04);
   --shadow-lg: 0 20px 60px rgba(40, 20, 10, 0.18);
 
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  /* Both designed with full Vietnamese support (stacked diacritics like ổ, ế, ặ). */
+  --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
 
   color-scheme: light;
 }
