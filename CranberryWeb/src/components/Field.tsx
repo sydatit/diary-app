@@ -1,5 +1,6 @@
 import { forwardRef, useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
+import { useI18n } from '../i18n'
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string
@@ -13,6 +14,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
   ref,
 ) {
   const id = useId()
+  const { t } = useI18n()
   const [show, setShow] = useState(false)
   const isPassword = type === 'password'
   return (
@@ -27,7 +29,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
             type="button"
             className="input-icon-btn"
             onClick={() => setShow((s) => !s)}
-            aria-label={show ? 'Hide password' : 'Show password'}
+            aria-label={t(show ? 'auth.hidePassword' : 'auth.showPassword')}
           >
             {show ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>

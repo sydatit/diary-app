@@ -24,10 +24,13 @@ export class ApiError extends Error {
   /** Machine-readable code from the API, e.g. "EmailNotConfirmed", "Expired". */
   code?: string
   body: unknown
-  constructor(status: number, message: string, body?: unknown) {
+  /** Translation key when the message was made up on the client (no server message to show). */
+  key?: string
+  constructor(status: number, message: string, body?: unknown, key?: string) {
     super(message)
     this.status = status
     this.body = body
+    this.key = key
     if (body && typeof body === 'object' && 'code' in body && typeof (body as { code: unknown }).code === 'string') {
       this.code = (body as { code: string }).code
     }
@@ -40,7 +43,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 }
 
 /** Turn the various error shapes the API returns into one readable message. */
-function extractMessage(body: unknown, status: number): string {
+function extractMessage(body: unknown): string {
   if (Array.isArray(body)) {
     // ASP.NET Identity errors: [{ code, description }]
     const msgs = body.map((e) => (e && typeof e === 'object' && 'description' in e ? String(e.description) : '')).filter(Boolean)
@@ -56,10 +59,15 @@ function extractMessage(body: unknown, status: number): string {
     }
     if (typeof b.title === 'string') return b.title
   }
-  if (status === 404) return 'Not found.'
-  if (status === 401) return 'Your session has expired. Please sign in again.'
-  if (status >= 500) return 'The server ran into a problem. Please try again.'
-  return 'Something went wrong.'
+  return ''
+}
+
+/** Client-side fallback (English text + translation key) when the server gave no message. */
+function fallbackError(status: number): [string, string] {
+  if (status === 404) return ['Not found.', 'error.notFound']
+  if (status === 401) return ['Your session has expired. Please sign in again.', 'error.session']
+  if (status >= 500) return ['The server ran into a problem. Please try again.', 'error.server']
+  return ['Something went wrong.', 'error.generic']
 }
 
 export async function api<T = void>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -78,7 +86,7 @@ export async function api<T = void>(path: string, options: { method?: string; bo
       body: isForm ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,
     })
   } catch {
-    throw new ApiError(0, 'Cannot reach the server. Check your connection.')
+    throw new ApiError(0, 'Cannot reach the server. Check your connection.', undefined, 'error.network')
   }
 
   const text = await res.text()
@@ -93,7 +101,10 @@ export async function api<T = void>(path: string, options: { method?: string; bo
 
   if (!res.ok) {
     if (res.status === 401 && token) onUnauthorized?.()
-    throw new ApiError(res.status, extractMessage(body, res.status), body)
+    const message = extractMessage(body)
+    if (message) throw new ApiError(res.status, message, body)
+    const [text, key] = fallbackError(res.status)
+    throw new ApiError(res.status, text, body, key)
   }
   return body as T
 }

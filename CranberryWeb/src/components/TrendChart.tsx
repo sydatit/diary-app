@@ -1,9 +1,10 @@
 import type { DayPoint } from '../lib/stats'
 import { levelColor, moodOf } from '../lib/stats'
-import { fmt } from '../lib/date'
+import { useI18n } from '../i18n'
 
 /** Bars = urge to grab the phone (1–10, coloured by level), line = stress (1–10), emoji row = mood. */
 export function TrendChart({ data }: { data: DayPoint[] }) {
+  const { t, fmt } = useI18n()
   const W = 640
   const H = 212
   const padX = 8
@@ -31,7 +32,7 @@ export function TrendChart({ data }: { data: DayPoint[] }) {
 
   return (
     <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Last 14 days">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('dash.last14')}>
         {[0.25, 0.5, 0.75, 1].map((g) => (
           <line key={g} x1={0} x2={W} y1={top + plotH * (1 - g)} y2={top + plotH * (1 - g)} className="chart-grid" />
         ))}
@@ -39,11 +40,11 @@ export function TrendChart({ data }: { data: DayPoint[] }) {
         {data.map((d, i) => {
           const logged = d.urge != null
           const h = logged ? Math.max(3, top + plotH - y(d.urge!)) : 3
-          const stress = d.stress != null ? ` · stress ${d.stress}/10` : ''
+          const stress = d.stress != null ? ` · ${t('chart.stress', { n: d.stress })}` : ''
           return (
             <g key={i}>
               <title>
-                {fmt.short(d.date)}: {logged ? `urge ${d.urge}/10${stress} · ${moodOf(d.mood!).label}` : 'no entry'}
+                {fmt.short(d.date)}: {logged ? `${t('chart.urge', { n: d.urge! })}${stress} · ${t(moodOf(d.mood!).label)}` : t('chart.noEntry')}
               </title>
               <rect
                 x={x(i) - barW / 2}
@@ -72,10 +73,10 @@ export function TrendChart({ data }: { data: DayPoint[] }) {
       </svg>
       <div className="chart-legend">
         <span>
-          <i className="lg-urge" /> Urge to grab the phone
+          <i className="lg-urge" /> {t('chart.legendUrge')}
         </span>
         <span>
-          <i className="lg-line" /> Stress
+          <i className="lg-line" /> {t('chart.legendStress')}
         </span>
       </div>
     </div>

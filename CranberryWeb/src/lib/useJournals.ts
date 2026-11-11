@@ -3,12 +3,14 @@ import { journalsApi } from '../api/journals'
 import { useAuth } from '../auth/AuthContext'
 import type { Journal } from '../types'
 import { sortByDateDesc } from './stats'
+import { errorText, useI18n } from '../i18n'
 
 export function useJournals() {
   const { userId } = useAuth()
   const [journals, setJournals] = useState<Journal[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { t } = useI18n()
+  const [error, setError] = useState<unknown>(null)
 
   const reload = useCallback(async () => {
     if (!userId) return
@@ -17,7 +19,7 @@ export function useJournals() {
     try {
       setJournals(sortByDateDesc(await journalsApi.list(userId)))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load your journal.')
+      setError(e)
     } finally {
       setLoading(false)
     }
@@ -27,5 +29,5 @@ export function useJournals() {
     reload()
   }, [reload])
 
-  return { journals, loading, error, reload }
+  return { journals, loading, error: error ? errorText(error, t, 'error.loadJournal') : null, reload }
 }

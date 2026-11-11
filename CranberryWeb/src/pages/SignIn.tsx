@@ -7,9 +7,11 @@ import { Field } from '../components/Field'
 import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
 import { AuthLayout } from './AuthLayout'
+import { errorText, useI18n } from '../i18n'
 
 export default function SignIn() {
   const { signIn } = useAuth()
+  const { t } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -32,26 +34,26 @@ export default function SignIn() {
         navigate('/verify', { state: { email: email.trim(), sent: true } })
         return
       }
-      setError(err instanceof Error && err.message !== 'Unable to sign in.' ? err.message : 'Incorrect email or password.')
+      setError(err instanceof Error && err.message !== 'Unable to sign in.' ? errorText(err, t) : t('signin.incorrect'))
       setBusy(false)
     }
   }
 
   return (
     <AuthLayout
-      title="Welcome back"
-      subtitle="Sign in to continue your journal."
+      title={t('signin.title')}
+      subtitle={t('signin.subtitle')}
       footer={
         <>
-          New to Unplug? <Link to="/register">Create an account</Link>
+          {t('signin.newHere')} <Link to="/register">{t('signin.createAccount')}</Link>
         </>
       }
     >
       <form onSubmit={submit} className="stack">
         <Alert>{error}</Alert>
-        <Field label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+        <Field label={t('auth.email')} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <Field
-          label="Password"
+          label={t('auth.password')}
           type="password"
           autoComplete="current-password"
           required
@@ -59,7 +61,7 @@ export default function SignIn() {
           onChange={(e) => setPassword(e.target.value)}
         />
         <Button type="submit" block loading={busy}>
-          Sign in
+          {t('signin.submit')}
         </Button>
       </form>
     </AuthLayout>

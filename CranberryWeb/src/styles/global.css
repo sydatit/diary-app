@@ -977,6 +977,7 @@ input::placeholder {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .segmented button.active {
   background: var(--surface);
@@ -1213,6 +1214,15 @@ input::placeholder {
   position: absolute;
   top: 20px;
   right: 20px;
+  display: flex;
+  gap: 4px;
+}
+.lang-toggle {
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 .danger-zone {
   display: flex;
@@ -1430,6 +1440,7 @@ input::placeholder {
   }
   .segmented button {
     flex: 1;
+    padding: 0 8px;
   }
   .profile-row {
     flex-wrap: wrap;

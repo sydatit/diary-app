@@ -7,6 +7,7 @@ import { ApiError } from '../api/client'
 import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
 import { AuthLayout } from './AuthLayout'
+import { errorText, useI18n } from '../i18n'
 
 const LEN = 6
 const COOLDOWN = 60
@@ -15,6 +16,7 @@ export default function VerifyEmail() {
   const location = useLocation()
   const navigate = useNavigate()
   const { completeSignIn } = useAuth()
+  const { t } = useI18n()
   const state = location.state as { email?: string; sent?: boolean } | null
   const email = state?.email ?? ''
 
@@ -54,7 +56,7 @@ export default function VerifyEmail() {
         navigate('/signin', { replace: true })
         return
       }
-      setError(err instanceof Error ? err.message : 'Verification failed.')
+      setError(errorText(err, t, 'verify.failed'))
       if (err instanceof ApiError && err.code !== 'Invalid') setDigits(Array(LEN).fill(''))
       setBusy(false)
       inputs.current[0]?.focus()
@@ -95,7 +97,7 @@ export default function VerifyEmail() {
     setInfo(null)
     try {
       await usersApi.resendCode(email)
-      setInfo('A new code is on its way.')
+      setInfo(t('verify.newCodeSent'))
       setDigits(Array(LEN).fill(''))
       setCooldown(COOLDOWN)
       inputs.current[0]?.focus()
@@ -104,7 +106,7 @@ export default function VerifyEmail() {
         ? Number((err.body as { retryAfter: number }).retryAfter)
         : 0
       if (retry) setCooldown(retry)
-      setError(err instanceof Error ? err.message : 'Could not resend the code.')
+      setError(errorText(err, t, 'verify.resendFailed'))
     } finally {
       setResending(false)
     }
@@ -112,11 +114,11 @@ export default function VerifyEmail() {
 
   return (
     <AuthLayout
-      title="Check your email"
+      title={t('verify.title')}
       subtitle=""
       footer={
         <>
-          Wrong email? <Link to="/register">Start over</Link>
+          {t('verify.wrongEmail')} <Link to="/register">{t('verify.startOver')}</Link>
         </>
       }
     >
@@ -125,8 +127,7 @@ export default function VerifyEmail() {
           <MailCheck size={22} />
         </span>
         <p className="muted">
-          We sent a 6-digit code to <strong className="text">{email}</strong>. Enter it below to activate your account. It expires in 15
-          minutes.
+          {t('verify.sentTo')} <strong className="text">{email}</strong>. {t('verify.instructions')}
         </p>
       </div>
       <form
@@ -147,7 +148,7 @@ export default function VerifyEmail() {
               inputMode="numeric"
               autoComplete={i === 0 ? 'one-time-code' : 'off'}
               maxLength={i === 0 ? LEN : 1}
-              aria-label={`Digit ${i + 1}`}
+              aria-label={t('verify.digit', { n: i + 1 })}
               onChange={(e) => setAt(i, e.target.value)}
               onKeyDown={(e) => onKey(i, e)}
               onPaste={onPaste}
@@ -157,12 +158,12 @@ export default function VerifyEmail() {
           ))}
         </div>
         <Button type="submit" block loading={busy} disabled={code.length !== LEN}>
-          Verify & continue
+          {t('verify.submit')}
         </Button>
         <p className="resend">
-          Didn't get it? Check spam, or{' '}
+          {t('verify.didntGet')}{' '}
           <button type="button" className="link-btn" onClick={resend} disabled={cooldown > 0 || resending}>
-            {cooldown > 0 ? `resend in ${cooldown}s` : resending ? 'sending…' : 'resend code'}
+            {cooldown > 0 ? t('verify.resendIn', { s: cooldown }) : resending ? t('verify.sending') : t('verify.resend')}
           </button>
         </p>
       </form>
