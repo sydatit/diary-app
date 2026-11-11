@@ -33,19 +33,16 @@ export function addDays(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 }
 
-export const fmt = {
-  long: (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
-  medium: (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-  month: (d: Date) => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-  weekday: (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' }),
-  dayNum: (d: Date) => String(d.getDate()),
-  short: (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+/** Date formatters bound to a locale; components get the current one from useI18n().fmt. */
+export function makeFmt(locale: string) {
+  const f = (opts: Intl.DateTimeFormatOptions) => (d: Date) => d.toLocaleDateString(locale, opts)
+  return {
+    long: f({ weekday: 'long', month: 'long', day: 'numeric' }),
+    medium: f({ month: 'short', day: 'numeric', year: 'numeric' }),
+    month: f({ month: 'long', year: 'numeric' }),
+    weekday: f({ weekday: 'short' }),
+    dayNum: (d: Date) => String(d.getDate()),
+    short: f({ month: 'short', day: 'numeric' }),
+  }
 }
-
-export function relativeDay(d: Date): string {
-  const diff = daysBetween(d, new Date())
-  if (diff === 0) return 'Today'
-  if (diff === 1) return 'Yesterday'
-  if (diff > 1 && diff < 7) return d.toLocaleDateString('en-US', { weekday: 'long' })
-  return fmt.medium(d)
-}
+export type Fmt = ReturnType<typeof makeFmt>

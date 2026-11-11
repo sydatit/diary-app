@@ -7,19 +7,21 @@ import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
 import { DetoxFields } from '../components/DetoxFields'
 import { AuthLayout } from './AuthLayout'
+import { errorText, useI18n, type TKey } from '../i18n'
 import { toISODate } from '../lib/date'
 import type { DetoxSetup } from '../types'
 
-const PASSWORD_RULES: [RegExp, string][] = [
-  [/.{6,}/, '6+ characters'],
-  [/[A-Z]/, 'uppercase'],
-  [/[a-z]/, 'lowercase'],
-  [/\d/, 'number'],
-  [/[^A-Za-z0-9]/, 'symbol'],
+const PASSWORD_RULES: [RegExp, TKey][] = [
+  [/.{6,}/, 'register.rule.length'],
+  [/[A-Z]/, 'register.rule.upper'],
+  [/[a-z]/, 'register.rule.lower'],
+  [/\d/, 'register.rule.number'],
+  [/[^A-Za-z0-9]/, 'register.rule.symbol'],
 ]
 
 export default function Register() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [step, setStep] = useState<1 | 2>(1)
   const [email, setEmail] = useState('')
   const [userName, setUserName] = useState('')
@@ -33,11 +35,11 @@ export default function Register() {
   function next(e: FormEvent) {
     e.preventDefault()
     if (!/^[A-Za-z0-9._@+-]+$/.test(userName)) {
-      setError('Username can only contain letters, numbers and . _ @ + -')
+      setError(t('register.badUsername'))
       return
     }
     if (rules.some((r) => !r.ok)) {
-      setError('Please choose a stronger password.')
+      setError(t('register.weakPassword'))
       return
     }
     setError(null)
@@ -52,18 +54,18 @@ export default function Register() {
       await usersApi.register({ email: email.trim(), userName: userName.trim(), password, ...setup })
       navigate('/verify', { state: { email: email.trim(), sent: true } })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create your account.')
+      setError(errorText(err, t, 'register.failed'))
       setBusy(false)
     }
   }
 
   return (
     <AuthLayout
-      title={step === 1 ? 'Create your account' : 'Set your starting point'}
-      subtitle={step === 1 ? 'Step 1 of 2 · The basics' : 'Step 2 of 2 · So we can show your progress'}
+      title={t(step === 1 ? 'register.title1' : 'register.title2')}
+      subtitle={t(step === 1 ? 'register.subtitle1' : 'register.subtitle2')}
       footer={
         <>
-          Already have an account? <Link to="/signin">Sign in</Link>
+          {t('register.haveAccount')} <Link to="/signin">{t('register.signIn')}</Link>
         </>
       }
     >
@@ -75,18 +77,18 @@ export default function Register() {
         <form onSubmit={next} className="stack">
           <Alert>{error}</Alert>
           <Field
-            label="Email"
+            label={t('auth.email')}
             type="email"
             autoComplete="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoFocus
-            hint="We'll send a 6-digit code here to activate your account."
+            hint={t('register.emailHint')}
           />
-          <Field label="Username" autoComplete="username" required value={userName} onChange={(e) => setUserName(e.target.value)} />
+          <Field label={t('auth.username')} autoComplete="username" required value={userName} onChange={(e) => setUserName(e.target.value)} />
           <Field
-            label="Password"
+            label={t('auth.password')}
             type="password"
             autoComplete="new-password"
             required
@@ -96,14 +98,14 @@ export default function Register() {
               <span className="rules">
                 {rules.map((r) => (
                   <span key={r.label} className={r.ok ? 'ok' : ''}>
-                    {r.label}
+                    {t(r.label)}
                   </span>
                 ))}
               </span>
             }
           />
           <Button type="submit" block>
-            Continue
+            {t('register.continue')}
           </Button>
         </form>
       ) : (
@@ -112,10 +114,10 @@ export default function Register() {
           <DetoxFields value={setup} onChange={setSetup} />
           <div className="row">
             <Button type="button" variant="secondary" icon={<ArrowLeft size={16} />} onClick={() => setStep(1)} disabled={busy}>
-              Back
+              {t('common.back')}
             </Button>
             <Button type="submit" loading={busy} className="grow">
-              Create account
+              {t('register.create')}
             </Button>
           </div>
         </form>

@@ -3,15 +3,17 @@ import { BookOpen, Home, LogOut, PenLine, Settings } from 'lucide-react'
 import { Brand } from './Brand'
 import { ThemeToggle } from './ThemeToggle'
 import { useAuth } from '../auth/AuthContext'
+import { useI18n, type TKey } from '../i18n'
 
-const links = [
-  { to: '/', label: 'Today', icon: Home, end: true },
-  { to: '/journal', label: 'Journal', icon: BookOpen, end: false },
-  { to: '/settings', label: 'Settings', icon: Settings, end: false },
+const links: { to: string; label: TKey; icon: typeof Home; end: boolean }[] = [
+  { to: '/', label: 'nav.today', icon: Home, end: true },
+  { to: '/journal', label: 'nav.journal', icon: BookOpen, end: false },
+  { to: '/settings', label: 'nav.settings', icon: Settings, end: false },
 ]
 
 export function Layout() {
   const { profile, signOut } = useAuth()
+  const { t } = useI18n()
   const navigate = useNavigate()
   const initial = profile?.userName?.[0]?.toUpperCase() ?? '?'
 
@@ -21,13 +23,13 @@ export function Layout() {
         <Brand />
         <button className="btn btn-primary btn-block sidebar-cta" onClick={() => navigate('/journal/new')}>
           <PenLine size={16} />
-          <span>Reflect</span>
+          <span>{t('nav.reflect')}</span>
         </button>
         <nav>
           {links.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className="nav-link">
               <Icon size={18} />
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </NavLink>
           ))}
         </nav>
@@ -35,7 +37,7 @@ export function Layout() {
           <span className="avatar">{initial}</span>
           <span className="sidebar-user-name">{profile?.userName}</span>
           <ThemeToggle />
-          <button className="icon-btn" onClick={signOut} aria-label="Sign out" title="Sign out">
+          <button className="icon-btn" onClick={signOut} aria-label={t('common.signOut')} title={t('common.signOut')}>
             <LogOut size={16} />
           </button>
         </div>
@@ -59,16 +61,16 @@ export function Layout() {
         {links.slice(0, 2).map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className="tab">
             <Icon size={20} />
-            <span>{label}</span>
+            <span>{t(label)}</span>
           </NavLink>
         ))}
-        <NavLink to="/journal/new" className="tab tab-fab" aria-label="Reflect on today">
+        <NavLink to="/journal/new" className="tab tab-fab" aria-label={t('nav.reflectToday')}>
           <PenLine size={20} />
         </NavLink>
         {links.slice(2).map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className="tab">
             <Icon size={20} />
-            <span>{label}</span>
+            <span>{t(label)}</span>
           </NavLink>
         ))}
       </nav>

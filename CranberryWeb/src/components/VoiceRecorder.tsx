@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Mic, RotateCcw, Square, X } from 'lucide-react'
 import { Spinner } from './Spinner'
 import { diaryApi, type DiarySection } from '../api/diary'
-import { ApiError } from '../api/client'
+import { errorText, useI18n, type TKey } from '../i18n'
 
 type Status = 'idle' | 'recording' | 'processing' | 'error'
 
@@ -21,14 +21,13 @@ function formatTime(sec: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function micErrorMessage(err: unknown): string {
+function micErrorKey(err: unknown): TKey {
   if (err instanceof DOMException) {
-    if (err.name === 'NotAllowedError' || err.name === 'SecurityError')
-      return 'Bạn đã từ chối quyền micro. Hãy cho phép micro trong cài đặt trình duyệt rồi thử lại.'
-    if (err.name === 'NotFoundError') return 'Không tìm thấy micro trên thiết bị này.'
-    if (err.name === 'NotReadableError') return 'Micro đang được ứng dụng khác sử dụng.'
+    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') return 'voice.micDenied'
+    if (err.name === 'NotFoundError') return 'voice.micNotFound'
+    if (err.name === 'NotReadableError') return 'voice.micBusy'
   }
-  return 'Không thể bật micro. Vui lòng thử lại.'
+  return 'voice.micFailed'
 }
 
 interface Props {
@@ -42,6 +41,7 @@ interface Props {
 
 /** Round mic button meant to sit inside a textarea (see AutoTextarea `addon`). */
 export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Props) {
+  const { t } = useI18n()
   const [status, setStatus] = useState<Status>('idle')
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -93,13 +93,13 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   }
 
   async function start() {
-    if (!supported) return fail('Trình duyệt này không hỗ trợ ghi âm. Hãy dùng Chrome, Edge, Firefox hoặc Safari mới.')
+    if (!supported) return fail(t('voice.unsupported'))
     setError(null)
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (err) {
-      return fail(micErrorMessage(err))
+      return fail(t(micErrorKey(err)))
     }
     if (unmountedRef.current) {
       stream.getTracks().forEach((t) => t.stop())
@@ -112,7 +112,7 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
     try {
       recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
     } catch {
-      return fail('Trình duyệt không ghi âm được định dạng được hỗ trợ.')
+      return fail(t('voice.formatUnsupported'))
     }
     recorderRef.current = recorder
     chunksRef.current = []
@@ -147,7 +147,7 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   }
 
   async function submit(blob: Blob) {
-    if (blob.size === 0) return fail('Không thu được âm thanh. Bạn thử ghi âm lại nhé.')
+    if (blob.size === 0) return fail(t('voice.empty'))
     setStatus('processing')
     try {
       const summary = await diaryApi.voiceToDiary(blob, section)
@@ -156,7 +156,7 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
       setStatus('idle')
     } catch (err) {
       if (unmountedRef.current) return
-      fail(err instanceof ApiError || err instanceof Error ? err.message : 'Có lỗi xảy ra. Vui lòng thử lại.')
+      fail(errorText(err, t, 'voice.failed'))
     }
   }
 
@@ -168,8 +168,8 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
           className="voice-mic"
           onClick={start}
           disabled={disabled}
-          aria-label="Ghi âm cho mục này"
-          title="Ghi âm cho mục này"
+          aria-label={t('voice.record')}
+          title={t('voice.record')}
         >
           <Mic size={18} />
         </button>
@@ -181,14 +181,14 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
             <span className="rec-dot" aria-hidden />
             <span className="rec-timer">{formatTime(seconds)}</span>
           </span>
-          <button type="button" className="voice-mic recording" onClick={stop} aria-label="Dừng và viết vào nhật ký" title="Dừng & viết">
+          <button type="button" className="voice-mic recording" onClick={stop} aria-label={t('voice.stop')} title={t('voice.stop')}>
             <Square size={14} fill="currentColor" />
           </button>
         </>
       )}
 
       {status === 'processing' && (
-        <span className="voice-mic processing" aria-live="polite" aria-label="AI đang viết nhật ký..." title="AI đang viết nhật ký...">
+        <span className="voice-mic processing" aria-live="polite" aria-label={t('voice.processing')} title={t('voice.processing')}>
           <Spinner size={16} />
         </span>
       )}
@@ -197,11 +197,11 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
         <>
           <div className="voice-error" role="alert">
             <span>{error}</span>
-            <button type="button" className="voice-error-close" onClick={() => setStatus('idle')} aria-label="Đóng">
+            <button type="button" className="voice-error-close" onClick={() => setStatus('idle')} aria-label={t('common.close')}>
               <X size={14} />
             </button>
           </div>
-          <button type="button" className="voice-mic" onClick={start} disabled={disabled} aria-label="Thử ghi âm lại" title="Thử lại">
+          <button type="button" className="voice-mic" onClick={start} disabled={disabled} aria-label={t('voice.retry')} title={t('voice.retry')}>
             <RotateCcw size={16} />
           </button>
         </>

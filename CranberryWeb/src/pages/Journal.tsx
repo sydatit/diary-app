@@ -6,11 +6,13 @@ import { EntryCard } from '../components/EntryCard'
 import { EmptyState } from '../components/EmptyState'
 import { FullPageSpinner } from '../components/Spinner'
 import { Alert } from '../components/Alert'
-import { fmt, parseDate } from '../lib/date'
+import { parseDate } from '../lib/date'
+import { useI18n } from '../i18n'
 import type { Journal as Entry } from '../types'
 
 export default function Journal() {
   const { journals, loading, error } = useJournals()
+  const { t, fmt } = useI18n()
   const [query, setQuery] = useState('')
 
   const groups = useMemo(() => {
@@ -22,11 +24,11 @@ export default function Journal() {
     const map = new Map<string, Entry[]>()
     for (const j of list) {
       const d = parseDate(j.date)
-      const key = d ? fmt.month(d) : 'Undated'
+      const key = d ? fmt.month(d) : t('journal.undated')
       map.set(key, [...(map.get(key) ?? []), j])
     }
     return [...map.entries()]
-  }, [journals, query])
+  }, [journals, query, fmt, t])
 
   if (loading) return <FullPageSpinner />
 
@@ -35,13 +37,13 @@ export default function Journal() {
       <header className="page-head">
         <div>
           <p className="eyebrow">
-            {journals.length} {journals.length === 1 ? 'reflection' : 'reflections'}
+            {t(journals.length === 1 ? 'journal.count_one' : 'journal.count_other', { n: journals.length })}
           </p>
-          <h1>Journal</h1>
+          <h1>{t('journal.title')}</h1>
         </div>
         <Link to="/journal/new" className="btn btn-primary hide-mobile">
           <PenLine size={16} />
-          <span>Reflect on today</span>
+          <span>{t('nav.reflectToday')}</span>
         </Link>
       </header>
 
@@ -50,12 +52,12 @@ export default function Journal() {
       {journals.length === 0 ? (
         <EmptyState
           icon={<BookOpen size={26} />}
-          title="Your journal is empty"
-          text="Each evening, note how the day went, what you're grateful for, what you did well and one thing to improve."
+          title={t('journal.emptyTitle')}
+          text={t('journal.emptyText')}
           action={
             <Link to="/journal/new" className="btn btn-primary">
               <PenLine size={16} />
-              <span>Write your first reflection</span>
+              <span>{t('journal.writeFirst')}</span>
             </Link>
           }
         />
@@ -64,12 +66,12 @@ export default function Journal() {
           <div className="toolbar">
             <div className="search">
               <Search size={16} />
-              <input placeholder="Search reflections…" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input placeholder={t('journal.search')} value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
           </div>
 
           {groups.length === 0 ? (
-            <p className="muted center-pad">No reflections match.</p>
+            <p className="muted center-pad">{t('journal.noMatch')}</p>
           ) : (
             groups.map(([month, items]) => (
               <section key={month} className="month">

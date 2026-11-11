@@ -1,4 +1,5 @@
 import type { Journal, UserProfile } from '../types'
+import type { TKey } from '../i18n/en'
 import { addDays, daysBetween, parseDate, startOfDay, toISODate } from './date'
 
 export interface Stats {
@@ -84,30 +85,23 @@ export function sortByDateDesc(journals: Journal[]): Journal[] {
 }
 
 export const MOODS = [
-  { value: 1, emoji: '😞', label: 'Rough' },
-  { value: 2, emoji: '😕', label: 'Low' },
-  { value: 3, emoji: '😐', label: 'Okay' },
-  { value: 4, emoji: '🙂', label: 'Good' },
-  { value: 5, emoji: '😄', label: 'Great' },
-]
+  { value: 1, emoji: '😞', label: 'mood.1' },
+  { value: 2, emoji: '😕', label: 'mood.2' },
+  { value: 3, emoji: '😐', label: 'mood.3' },
+  { value: 4, emoji: '🙂', label: 'mood.4' },
+  { value: 5, emoji: '😄', label: 'mood.5' },
+] as const satisfies readonly { value: number; emoji: string; label: TKey }[]
 
 export const moodOf = (n: number) => MOODS[Math.min(5, Math.max(1, Math.round(n))) - 1]
 
-export function urgeLabel(n: number): string {
-  if (n <= 2) return 'Barely there'
-  if (n <= 4) return 'Mild'
-  if (n <= 6) return 'Noticeable'
-  if (n <= 8) return 'Strong'
-  return 'Constant pull'
-}
+/** 1–10 -> band 1..5 (1-2, 3-4, 5-6, 7-8, 9-10). */
+const band = (n: number) => Math.min(5, Math.max(1, Math.ceil(n / 2)))
 
-export function stressLabel(n: number): string {
-  if (n <= 2) return 'Calm'
-  if (n <= 4) return 'Mild'
-  if (n <= 6) return 'Moderate'
-  if (n <= 8) return 'High'
-  return 'Overwhelmed'
-}
+/** Translation key for an urge level. */
+export const urgeLabel = (n: number) => `level.urge.${band(n)}` as TKey
+
+/** Translation key for a stress level. */
+export const stressLabel = (n: number) => `level.stress.${band(n)}` as TKey
 
 /** Colour for a 1–10 level (urge or stress), from sage (calm) to rose (strong). */
 export function levelColor(n: number): string {

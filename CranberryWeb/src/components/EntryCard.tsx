@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
 import type { Journal } from '../types'
-import { parseDate, fmt } from '../lib/date'
+import { parseDate } from '../lib/date'
+import { useI18n } from '../i18n'
 import { firstLine, levelColor, moodOf, stressLabel } from '../lib/stats'
 import { UrgeDots } from './UrgeSlider'
 
 export function EntryCard({ entry }: { entry: Journal }) {
+  const { t, fmt } = useI18n()
   const d = parseDate(entry.date)
   const mood = moodOf(entry.mood)
   const stress = entry.stressLevel
@@ -17,21 +19,21 @@ export function EntryCard({ entry }: { entry: Journal }) {
       </div>
       <div className="entry-body">
         <div className="entry-meta">
-          <span className="entry-mood" title={mood.label}>
+          <span className="entry-mood" title={t(mood.label)}>
             {mood.emoji}
           </span>
           <UrgeDots value={entry.urgeLevel} />
           {stress != null && (
             <span
               className="entry-stress"
-              title={`Stress ${stress}/10 · ${stressLabel(stress)}`}
+              title={`${t('entry.stress', { n: stress })} · ${t(stressLabel(stress))}`}
               style={{ color: levelColor(stress), background: `color-mix(in srgb, ${levelColor(stress)} 12%, transparent)` }}
             >
-              Stress {stress}/10
+              {t('entry.stress', { n: stress })}
             </span>
           )}
         </div>
-        <p className={`entry-notes ${text ? '' : 'muted'}`}>{text || 'No reflection written'}</p>
+        <p className={`entry-notes ${text ? '' : 'muted'}`}>{text || t('entry.noText')}</p>
       </div>
     </Link>
   )

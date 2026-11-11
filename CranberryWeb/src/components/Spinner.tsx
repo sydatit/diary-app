@@ -1,5 +1,8 @@
+import { useI18n } from '../i18n'
+
 export function Spinner({ size = 18 }: { size?: number }) {
-  return <span className="spinner" style={{ width: size, height: size }} aria-label="Loading" />
+  const { t } = useI18n()
+  return <span className="spinner" style={{ width: size, height: size }} aria-label={t('common.loading')} />
 }
 
 export function FullPageSpinner() {
