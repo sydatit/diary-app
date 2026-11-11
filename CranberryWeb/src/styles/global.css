@@ -9,6 +9,11 @@ body,
 #root {
   min-height: 100%;
 }
+/* No sideways scrolling on phones. `clip` (not `hidden`) keeps the sticky topbar working. */
+html,
+body {
+  overflow-x: clip;
+}
 
 body {
   margin: 0;
@@ -73,6 +78,7 @@ textarea {
 }
 .grow {
   flex: 1;
+  min-width: 0;
 }
 .stack {
   display: flex;
@@ -279,6 +285,18 @@ textarea {
 .input {
   height: 44px;
   margin-top: 14px;
+}
+input {
+  min-width: 0;
+  max-width: 100%;
+}
+/* iOS Safari gives date inputs a fixed intrinsic width that won't shrink. */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 44px;
 }
 textarea {
   resize: vertical;
@@ -1244,6 +1262,9 @@ input::placeholder {
   align-items: center;
   gap: 14px;
 }
+.profile-row .small {
+  overflow-wrap: anywhere;
+}
 .appearance {
   display: flex;
   align-items: center;
@@ -1476,34 +1497,97 @@ input::placeholder {
   .segmented button {
     flex: 1;
   }
+  .profile-row {
+    flex-wrap: wrap;
+  }
+  .profile-row > .btn,
+  .danger-zone > .btn {
+    width: 100%;
+  }
+  .appearance > .grow,
+  .danger-zone > .grow {
+    flex-basis: 100%;
+  }
 }
 
-/* ---------- Voice recorder ---------- */
-.voice-recorder {
-  margin-bottom: 4px;
+/* ---------- Voice recorder (inside a textarea) ---------- */
+.textarea-wrap {
+  position: relative;
 }
-.voice-row {
+.textarea-wrap.has-addon textarea {
+  padding-bottom: 54px;
+}
+.textarea-addon {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+.voice-mic-wrap {
+  position: relative;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 12px;
-  min-height: 40px;
+  gap: 8px;
+}
+.voice-mic {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.voice-mic:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.voice-mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.voice-mic.recording {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.voice-mic.processing {
+  color: var(--muted);
 }
 .voice-error {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: min(280px, 75vw);
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: var(--shadow);
 }
-.voice-error .alert {
-  width: 100%;
+.voice-error-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
 }
 .rec-indicator {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
+  font-size: 13px;
   background: var(--danger-soft);
   color: var(--danger);
   font-weight: 600;

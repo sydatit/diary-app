@@ -14,9 +14,26 @@ import { Modal } from '../components/Modal'
 import { Alert } from '../components/Alert'
 import { FullPageSpinner } from '../components/Spinner'
 import { useToast } from '../components/Toast'
+import { appendLines, normalizeVoiceText } from '../lib/voiceText'
+import type { DiarySection } from '../api/diary'
 import { fmt, normalizeDate, parseDate, toISODate } from '../lib/date'
 import { findByDate } from '../lib/stats'
 import type { Journal, JournalInput } from '../types'
+
+type TextField = 'dayReflection' | 'gratitude' | 'win' | 'improvement'
+
+const PROMPTS: { field: TextField; section: DiarySection; label: string; placeholder: string; maxLength: number }[] = [
+  {
+    field: 'dayReflection',
+    section: 'reflection',
+    label: 'How was today?',
+    placeholder: 'What happened, how you spent your time, how the phone fit in…',
+    maxLength: 4000,
+  },
+  { field: 'gratitude', section: 'gratitude', label: 'What am I grateful for?', placeholder: 'A person, a moment, something small…', maxLength: 2000 },
+  { field: 'win', section: 'win', label: 'What did I do well?', placeholder: 'Left the phone in another room at dinner…', maxLength: 2000 },
+  { field: 'improvement', section: 'improvement', label: 'One thing to improve', placeholder: "Tomorrow I'll…", maxLength: 2000 },
+]
 
 const EMPTY: JournalInput = {
   date: toISODate(),
@@ -43,6 +60,8 @@ export default function EntryEditor() {
   const [deleting, setDeleting] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Only one field records at a time; the other mics are locked meanwhile.
+  const [voiceField, setVoiceField] = useState<TextField | null>(null)
 
   useEffect(() => {
     if (!userId) return
@@ -79,14 +98,11 @@ export default function EntryEditor() {
   }, [id, isNew, userId, navigate])
 
   const set = <K extends keyof JournalInput>(k: K, v: JournalInput[K]) => setForm((f) => ({ ...f, [k]: v }))
-  // Voice summary: fill an empty reflection, otherwise append on a new line so the user can review before saving.
+  // Voice summary: append its lines to the end of that field so the user can review before saving.
   // Functional update keeps anything typed while the AI was working.
-  function addVoiceSummary(summary: string) {
-    setForm((f) => {
-      const cur = f.dayReflection ?? ''
-      return { ...f, dayReflection: cur.trim() ? `${cur.replace(/\s+$/, '')}\n${summary}` : summary }
-    })
-    toast('Đã thêm tóm tắt từ ghi âm')
+  function addVoice(field: TextField, maxLength: number, summary: string) {
+    setForm((f) => ({ ...f, [field]: appendLines(f[field] ?? '', normalizeVoiceText(summary)).slice(0, maxLength) }))
+    toast('Đã thêm nội dung từ ghi âm')
   }
   const clash = isNew ? findByDate(existing, form.date) : undefined
   const hasText = [form.dayReflection, form.gratitude, form.win, form.improvement].some((t) => (t ?? '').trim())
@@ -178,35 +194,24 @@ export default function EntryEditor() {
 
         <section className="card editor-section">
           <h2 className="editor-title">Reflection</h2>
-          <VoiceRecorder onSummary={addVoiceSummary} />
-          <AutoTextarea
-            label="How was today?"
-            placeholder="What happened, how you spent your time, how the phone fit in…"
-            value={form.dayReflection ?? ''}
-            onChange={(v) => set('dayReflection', v)}
-            maxLength={4000}
-          />
-          <AutoTextarea
-            label="What am I grateful for?"
-            placeholder="A person, a moment, something small…"
-            value={form.gratitude ?? ''}
-            onChange={(v) => set('gratitude', v)}
-            maxLength={2000}
-          />
-          <AutoTextarea
-            label="What did I do well?"
-            placeholder="Left the phone in another room at dinner…"
-            value={form.win ?? ''}
-            onChange={(v) => set('win', v)}
-            maxLength={2000}
-          />
-          <AutoTextarea
-            label="One thing to improve"
-            placeholder="Tomorrow I'll…"
-            value={form.improvement ?? ''}
-            onChange={(v) => set('improvement', v)}
-            maxLength={2000}
-          />
+          {PROMPTS.map(({ field, section, label, placeholder, maxLength }) => (
+            <AutoTextarea
+              key={field}
+              label={label}
+              placeholder={placeholder}
+              value={form[field] ?? ''}
+              onChange={(v) => set(field, v)}
+              maxLength={maxLength}
+              addon={
+                <VoiceRecorder
+                  section={section}
+                  disabled={voiceField !== null && voiceField !== field}
+                  onBusyChange={(busy) => setVoiceField((cur) => (busy ? field : cur === field ? null : cur))}
+                  onSummary={(text) => addVoice(field, maxLength, text)}
+                />
+              }
+            />
+          ))}
         </section>
 
         <Alert>{error}</Alert>
