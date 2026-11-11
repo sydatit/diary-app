@@ -3,14 +3,10 @@ export interface UserProfile {
   userName: string
   email: string
   detoxStartDate: string | null
-  baselinePickups: number
-  dailyPickupGoal: number
 }
 
 export interface DetoxSetup {
   detoxStartDate: string
-  baselinePickups: number
-  dailyPickupGoal: number
 }
 
 export interface RegisterInput extends DetoxSetup {
@@ -24,7 +20,9 @@ export interface Journal {
   date: string
   mood: number
   urgeLevel: number
+  /** No longer shown; kept so editing an old entry doesn't wipe it. */
   pickups: number
+  stressLevel: number | null
   dayReflection: string | null
   gratitude: string | null
   win: string | null
@@ -34,7 +32,7 @@ export interface Journal {
 
 export type JournalInput = Pick<
   Journal,
-  'date' | 'mood' | 'urgeLevel' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
+  'date' | 'mood' | 'urgeLevel' | 'stressLevel' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
 >
 
 export interface Wrapped<T> {

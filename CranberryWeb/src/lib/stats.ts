@@ -4,12 +4,10 @@ import { addDays, daysBetween, parseDate, startOfDay, toISODate } from './date'
 export interface Stats {
   dayNumber: number
   started: boolean
-  avgPickups7: number | null
-  pickupsAvoided: number
+  avgStress7: number | null
   avgUrge7: number | null
   avgMood7: number | null
   streak: number
-  goalDays7: number
   entries7: number
 }
 
@@ -24,13 +22,11 @@ export function computeStats(profile: UserProfile, journals: Journal[]): Stats {
     const d = parseDate(j.date)
     return d && d >= weekAgo && d <= today
   })
-  const avg = (f: (j: Journal) => number) => (recent.length ? recent.reduce((s, j) => s + f(j), 0) / recent.length : null)
-
-  const baseline = profile.baselinePickups || 0
-  const pickupsAvoided = journals.reduce((s, j) => {
-    const d = parseDate(j.date)
-    return d && (!start || d >= start) ? s + Math.max(0, baseline - j.pickups) : s
-  }, 0)
+  // Average over entries that have the value (stress is missing on entries written before it existed).
+  const avg = (f: (j: Journal) => number | null) => {
+    const vals = recent.map(f).filter((v): v is number => v != null)
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+  }
 
   // Consecutive days with a reflection, ending today (or yesterday if today isn't written yet).
   const days = new Set(journals.map((j) => normalize(j.date)))
@@ -41,16 +37,13 @@ export function computeStats(profile: UserProfile, journals: Journal[]): Stats {
     cursor = addDays(cursor, -1)
   }
 
-  const goal = profile.dailyPickupGoal
   return {
     dayNumber,
     started,
-    avgPickups7: avg((j) => j.pickups),
-    pickupsAvoided,
+    avgStress7: avg((j) => j.stressLevel),
     avgUrge7: avg((j) => j.urgeLevel),
     avgMood7: avg((j) => j.mood),
     streak,
-    goalDays7: goal > 0 ? recent.filter((j) => j.pickups <= goal).length : 0,
     entries7: recent.length,
   }
 }
@@ -66,8 +59,8 @@ export function findByDate(journals: Journal[], iso: string): Journal | undefine
 
 export interface DayPoint {
   date: Date
-  pickups: number | null
   urge: number | null
+  stress: number | null
   mood: number | null
 }
 
@@ -76,7 +69,9 @@ export function lastNDays(journals: Journal[], n: number): DayPoint[] {
   return Array.from({ length: n }, (_, i) => {
     const date = addDays(today, i - n + 1)
     const j = findByDate(journals, toISODate(date))
-    return j ? { date, pickups: j.pickups, urge: j.urgeLevel, mood: j.mood } : { date, pickups: null, urge: null, mood: null }
+    return j
+      ? { date, urge: j.urgeLevel, stress: j.stressLevel ?? null, mood: j.mood }
+      : { date, urge: null, stress: null, mood: null }
   })
 }
 
@@ -106,8 +101,16 @@ export function urgeLabel(n: number): string {
   return 'Constant pull'
 }
 
-/** Colour for an urge level, from sage (calm) to coral (strong). */
-export function urgeColor(n: number): string {
+export function stressLabel(n: number): string {
+  if (n <= 2) return 'Calm'
+  if (n <= 4) return 'Mild'
+  if (n <= 6) return 'Moderate'
+  if (n <= 8) return 'High'
+  return 'Overwhelmed'
+}
+
+/** Colour for a 1–10 level (urge or stress), from sage (calm) to rose (strong). */
+export function levelColor(n: number): string {
   if (n <= 2) return 'var(--sage)'
   if (n <= 4) return 'var(--olive)'
   if (n <= 6) return 'var(--amber)'

@@ -11,7 +11,7 @@ export function AuthLayout({ title, subtitle, children, footer }: { title: strin
           <blockquote>
             “Put the phone down. Pick your life up.”
           </blockquote>
-          <p>Unplug is a quiet daily journal for loosening your phone's grip — notice the urge, reflect on your day, and watch the pickups fall.</p>
+          <p>Unplug is a quiet daily journal for loosening your phone's grip — notice the urge, check in on your stress, and reflect on your day.</p>
         </div>
       </div>
       <div className="auth-main">

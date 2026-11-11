@@ -5,8 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 import { journalsApi } from '../api/journals'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
-import { Stepper } from '../components/Stepper'
-import { UrgeSlider } from '../components/UrgeSlider'
+import { StressSlider, UrgeSlider } from '../components/UrgeSlider'
 import { MoodPicker } from '../components/MoodPicker'
 import { AutoTextarea } from '../components/AutoTextarea'
 import { VoiceRecorder } from '../components/VoiceRecorder'
@@ -39,6 +38,7 @@ const EMPTY: JournalInput = {
   date: toISODate(),
   mood: 3,
   urgeLevel: 5,
+  stressLevel: 5,
   pickups: 0,
   dayReflection: '',
   gratitude: '',
@@ -49,8 +49,7 @@ const EMPTY: JournalInput = {
 export default function EntryEditor() {
   const { id } = useParams()
   const isNew = !id
-  const { userId, profile } = useAuth()
-  const goal = profile?.dailyPickupGoal ?? 0
+  const { userId } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const [form, setForm] = useState<JournalInput>({ ...EMPTY, date: toISODate() })
@@ -86,7 +85,8 @@ export default function EntryEditor() {
           date: normalizeDate(j.date) || toISODate(),
           mood: Math.min(5, Math.max(1, j.mood || 3)),
           urgeLevel: Math.min(10, Math.max(1, j.urgeLevel || 5)),
-          pickups: j.pickups,
+          stressLevel: j.stressLevel ? Math.min(10, Math.max(1, j.stressLevel)) : 5,
+          pickups: j.pickups ?? 0,
           dayReflection: j.dayReflection ?? '',
           gratitude: j.gratitude ?? '',
           win: j.win ?? '',
@@ -180,15 +180,8 @@ export default function EntryEditor() {
           </div>
 
           <div className="field">
-            <label>Phone pickups today</label>
-            <div className="row between">
-              <Stepper value={form.pickups} onChange={(n) => set('pickups', n)} max={2000} label="Phone pickups" />
-              {goal > 0 && (
-                <span className={`pill ${form.pickups <= goal ? 'pill-good' : 'pill-muted'}`}>
-                  {form.pickups <= goal ? `Within your goal of ${goal} 🌿` : `${form.pickups - goal} over your goal`}
-                </span>
-              )}
-            </div>
+            <label>How stressed did you feel?</label>
+            <StressSlider value={form.stressLevel ?? 5} onChange={(n) => set('stressLevel', n)} />
           </div>
         </section>
 

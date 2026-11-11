@@ -404,6 +404,7 @@ public class UsersController : ControllerBase
     journal.Mood = input.Mood;
     journal.UrgeLevel = input.UrgeLevel;
     journal.Pickups = input.Pickups;
+    journal.StressLevel = input.StressLevel;
     journal.DayReflection = input.DayReflection?.Trim();
     journal.Gratitude = input.Gratitude?.Trim();
     journal.Win = input.Win?.Trim();

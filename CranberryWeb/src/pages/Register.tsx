@@ -24,7 +24,7 @@ export default function Register() {
   const [email, setEmail] = useState('')
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
-  const [setup, setSetup] = useState<DetoxSetup>({ detoxStartDate: toISODate(), baselinePickups: 80, dailyPickupGoal: 40 })
+  const [setup, setSetup] = useState<DetoxSetup>({ detoxStartDate: toISODate() })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -46,10 +46,6 @@ export default function Register() {
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (setup.dailyPickupGoal > setup.baselinePickups) {
-      setError('Your goal should be lower than your current pickups.')
-      return
-    }
     setBusy(true)
     setError(null)
     try {

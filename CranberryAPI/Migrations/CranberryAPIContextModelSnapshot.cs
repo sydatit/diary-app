@@ -130,6 +130,9 @@ namespace CranberryAPI.Migrations
                     b.Property<int>("Pickups")
                         .HasColumnType("int");
 
+                    b.Property<int?>("StressLevel")
+                        .HasColumnType("int");
+
                     b.Property<int>("UrgeLevel")
                         .HasColumnType("int");
 

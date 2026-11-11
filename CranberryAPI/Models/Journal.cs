@@ -13,7 +13,8 @@ public class Journal
 
   public int Mood { get; set; }             // 1..5
   public int UrgeLevel { get; set; }        // 1..10, how strongly you wanted to grab the phone
-  public int Pickups { get; set; }          // phone pickups that day
+  public int Pickups { get; set; }          // phone pickups that day (no longer shown in the web app)
+  public int? StressLevel { get; set; }     // 1..10, null on entries written before stress tracking
 
   public string DayReflection { get; set; } // How was today?
   public string Gratitude { get; set; }     // What am I grateful for?

@@ -365,43 +365,7 @@ input::placeholder {
   color: var(--text-2);
 }
 
-/* ---------- Stepper ---------- */
-.stepper {
-  display: inline-flex;
-  align-items: center;
-  height: 44px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  overflow: hidden;
-}
-.stepper button {
-  width: 44px;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  display: grid;
-  place-items: center;
-  color: var(--text-2);
-}
-.stepper button:hover:not(:disabled) {
-  background: var(--bg-soft);
-}
-.stepper button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.stepper input {
-  width: 48px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  text-align: center;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-/* ---------- Craving ---------- */
+/* ---------- Level sliders (urge, stress) ---------- */
 .urge-slider {
   display: flex;
   flex-direction: column;
@@ -822,23 +786,6 @@ input::placeholder {
 .chart-bar {
   opacity: 0.85;
 }
-.chart-bar.met {
-  fill: var(--sage);
-}
-.chart-bar.over {
-  fill: var(--coral);
-}
-.chart-goal {
-  stroke: var(--sage);
-  stroke-dasharray: 6 5;
-  stroke-width: 1.5;
-}
-.chart-goal-label {
-  fill: var(--sage);
-  font-size: 11px;
-  font-family: var(--font-sans);
-  font-weight: 500;
-}
 .chart-mood {
   font-size: 15px;
 }
@@ -881,11 +828,8 @@ input::placeholder {
   height: 10px;
   border-radius: 3px;
 }
-.lg-met {
-  background: var(--sage);
-}
-.lg-over {
-  background: var(--coral);
+.lg-urge {
+  background: linear-gradient(90deg, var(--sage), var(--amber), var(--rose));
 }
 .lg-line {
   height: 2px !important;
@@ -953,22 +897,13 @@ input::placeholder {
   font-size: 17px;
   line-height: 1;
 }
-.entry-pickups {
+.entry-stress {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   font-size: 12.5px;
   font-weight: 500;
   padding: 2px 9px;
   border-radius: 999px;
-}
-.entry-pickups.met {
-  color: var(--sage);
-  background: var(--good-soft);
-}
-.entry-pickups.over {
-  color: var(--coral);
-  background: color-mix(in srgb, var(--coral) 12%, transparent);
 }
 .entry-notes {
   color: var(--text-2);
@@ -1451,8 +1386,7 @@ input::placeholder {
     display: none;
   }
   /* the chart's viewBox is scaled down ~2x on phones; compensate */
-  .chart-label,
-  .chart-goal-label {
+  .chart-label {
     font-size: 22px;
   }
   .chart-mood {

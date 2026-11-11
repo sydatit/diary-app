@@ -1,14 +1,13 @@
 import { Link } from 'react-router-dom'
-import { Smartphone } from 'lucide-react'
 import type { Journal } from '../types'
 import { parseDate, fmt } from '../lib/date'
-import { firstLine, moodOf } from '../lib/stats'
+import { firstLine, levelColor, moodOf, stressLabel } from '../lib/stats'
 import { UrgeDots } from './UrgeSlider'
 
-export function EntryCard({ entry, goal }: { entry: Journal; goal: number }) {
+export function EntryCard({ entry }: { entry: Journal }) {
   const d = parseDate(entry.date)
   const mood = moodOf(entry.mood)
-  const met = goal > 0 && entry.pickups <= goal
+  const stress = entry.stressLevel
   const text = firstLine(entry)
   return (
     <Link to={`/journal/${entry.journalId}`} className="entry">
@@ -21,11 +20,16 @@ export function EntryCard({ entry, goal }: { entry: Journal; goal: number }) {
           <span className="entry-mood" title={mood.label}>
             {mood.emoji}
           </span>
-          <span className={`entry-pickups ${met ? 'met' : 'over'}`} title={goal ? `Goal: ${goal}` : undefined}>
-            <Smartphone size={13} />
-            {entry.pickups} pickups
-          </span>
           <UrgeDots value={entry.urgeLevel} />
+          {stress != null && (
+            <span
+              className="entry-stress"
+              title={`Stress ${stress}/10 · ${stressLabel(stress)}`}
+              style={{ color: levelColor(stress), background: `color-mix(in srgb, ${levelColor(stress)} 12%, transparent)` }}
+            >
+              Stress {stress}/10
+            </span>
+          )}
         </div>
         <p className={`entry-notes ${text ? '' : 'muted'}`}>{text || 'No reflection written'}</p>
       </div>
