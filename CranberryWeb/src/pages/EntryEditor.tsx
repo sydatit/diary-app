@@ -105,15 +105,10 @@ export default function EntryEditor() {
     toast('Đã thêm nội dung từ ghi âm')
   }
   const clash = isNew ? findByDate(existing, form.date) : undefined
-  const hasText = [form.dayReflection, form.gratitude, form.win, form.improvement].some((t) => (t ?? '').trim())
 
   async function save(e: FormEvent) {
     e.preventDefault()
     if (!userId || clash) return
-    if (!hasText) {
-      setError('Write at least one of the four reflections.')
-      return
-    }
     setSaving(true)
     setError(null)
     try {
