@@ -17,8 +17,6 @@ export default function Settings() {
   const { pref, setPref } = useTheme()
   const [setup, setSetup] = useState<DetoxSetup>(() => ({
     detoxStartDate: normalizeDate(profile?.detoxStartDate) || toISODate(),
-    baselinePickups: profile?.baselinePickups ?? 0,
-    dailyPickupGoal: profile?.dailyPickupGoal ?? 0,
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +99,7 @@ export default function Settings() {
       <form className="card stack" onSubmit={save}>
         <div>
           <h2>Detox setup</h2>
-          <p className="muted small">Used for your goal tracking and the pickups-resisted count.</p>
+          <p className="muted small">Used to count your days of unplugging.</p>
         </div>
         <Alert>{error}</Alert>
         <DetoxFields value={setup} onChange={setSetup} />

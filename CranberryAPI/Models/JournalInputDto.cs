@@ -17,6 +17,9 @@ public class JournalInputDto
   [Range(0, 2000)]
   public int Pickups { get; set; }
 
+  [Range(1, 10)]
+  public int? StressLevel { get; set; }
+
   [MaxLength(4000)] public string DayReflection { get; set; }
   [MaxLength(2000)] public string Gratitude { get; set; }
   [MaxLength(2000)] public string Win { get; set; }

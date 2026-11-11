@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookOpen, PenLine, Search } from 'lucide-react'
-import { useAuth } from '../auth/AuthContext'
 import { useJournals } from '../lib/useJournals'
 import { EntryCard } from '../components/EntryCard'
 import { EmptyState } from '../components/EmptyState'
@@ -10,20 +9,13 @@ import { Alert } from '../components/Alert'
 import { fmt, parseDate } from '../lib/date'
 import type { Journal as Entry } from '../types'
 
-type Filter = 'all' | 'met' | 'over'
-
 export default function Journal() {
-  const { profile } = useAuth()
-  const goal = profile?.dailyPickupGoal ?? 0
   const { journals, loading, error } = useJournals()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = journals.filter((j) => {
-      if (filter === 'met' && j.pickups > goal) return false
-      if (filter === 'over' && j.pickups <= goal) return false
       if (!q) return true
       return [j.dayReflection, j.gratitude, j.win, j.improvement].some((t) => (t ?? '').toLowerCase().includes(q))
     })
@@ -34,7 +26,7 @@ export default function Journal() {
       map.set(key, [...(map.get(key) ?? []), j])
     }
     return [...map.entries()]
-  }, [journals, query, filter, goal])
+  }, [journals, query])
 
   if (loading) return <FullPageSpinner />
 
@@ -74,19 +66,6 @@ export default function Journal() {
               <Search size={16} />
               <input placeholder="Search reflections…" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
-            <div className="segmented">
-              {(
-                [
-                  ['all', 'All'],
-                  ['met', 'Goal met'],
-                  ['over', 'Over goal'],
-                ] as [Filter, string][]
-              ).map(([v, label]) => (
-                <button key={v} className={filter === v ? 'active' : ''} onClick={() => setFilter(v)}>
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {groups.length === 0 ? (
@@ -97,7 +76,7 @@ export default function Journal() {
                 <h2 className="month-title">{month}</h2>
                 <div className="entries">
                   {items.map((j) => (
-                    <EntryCard key={j.journalId} entry={j} goal={goal} />
+                    <EntryCard key={j.journalId} entry={j} />
                   ))}
                 </div>
               </section>

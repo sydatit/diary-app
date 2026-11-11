@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Flame, Heart, PenLine, ShieldCheck, Smartphone, Sparkles, Star, Waves } from 'lucide-react'
+import { Activity, Flame, Heart, PenLine, Smile, Sparkles, Star, Waves } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { useJournals } from '../lib/useJournals'
-import { computeStats, findByDate, lastNDays, moodOf, urgeLabel } from '../lib/stats'
+import { computeStats, findByDate, lastNDays, moodOf, stressLabel, urgeLabel } from '../lib/stats'
 import { fmt, parseDate, toISODate } from '../lib/date'
 import { TrendChart } from '../components/TrendChart'
 import { EntryCard } from '../components/EntryCard'
@@ -25,7 +25,6 @@ export default function Dashboard() {
   if (!profile) return null
 
   const s = computeStats(profile, journals)
-  const goal = profile.dailyPickupGoal
   const todayEntry = findByDate(journals, toISODate())
   const nextMilestone = MILESTONES.find((m) => m > s.dayNumber) ?? Math.ceil((s.dayNumber + 1) / 365) * 365
   const prevMilestone = [...MILESTONES].reverse().find((m) => m <= s.dayNumber) ?? 0
@@ -86,16 +85,16 @@ export default function Dashboard() {
 
       <section className="stats">
         <Stat
-          icon={<Smartphone size={18} />}
-          label="Avg pickups · 7 days"
-          value={s.avgPickups7 == null ? '—' : Math.round(s.avgPickups7).toString()}
-          sub={goal ? `Goal ${goal} · met ${s.goalDays7}/${s.entries7} days` : undefined}
+          icon={<Activity size={18} />}
+          label="Avg stress · 7 days"
+          value={s.avgStress7 == null ? '—' : s.avgStress7.toFixed(1)}
+          sub={s.avgStress7 == null ? 'No entries yet' : stressLabel(s.avgStress7)}
         />
         <Stat
-          icon={<ShieldCheck size={18} />}
-          label="Pickups resisted"
-          value={s.pickupsAvoided.toLocaleString()}
-          sub={`vs. your ${profile.baselinePickups}/day before`}
+          icon={<Smile size={18} />}
+          label="Avg mood · 7 days"
+          value={s.avgMood7 == null ? '—' : moodOf(s.avgMood7).emoji}
+          sub={s.avgMood7 == null ? 'No entries yet' : moodOf(s.avgMood7).label}
         />
         <Stat
           icon={<Waves size={18} />}
@@ -107,7 +106,7 @@ export default function Dashboard() {
           icon={<Flame size={18} />}
           label="Reflection streak"
           value={String(s.streak)}
-          sub={s.avgMood7 == null ? (s.streak === 1 ? 'day' : 'days') : `Mood lately ${moodOf(s.avgMood7).emoji}`}
+          sub={`${s.streak === 1 ? 'day' : 'days'} · wrote ${s.entries7}/7 this week`}
         />
       </section>
 
@@ -122,7 +121,7 @@ export default function Dashboard() {
             <Spinner />
           </div>
         ) : (
-          <TrendChart data={lastNDays(journals, 14)} goal={goal} />
+          <TrendChart data={lastNDays(journals, 14)} />
         )}
       </section>
 
@@ -169,7 +168,7 @@ export default function Dashboard() {
         ) : (
           <div className="entries">
             {journals.slice(0, 3).map((j) => (
-              <EntryCard key={j.journalId} entry={j} goal={goal} />
+              <EntryCard key={j.journalId} entry={j} />
             ))}
           </div>
         )}
