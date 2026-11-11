@@ -1,14 +1,16 @@
-import { useEffect, useId, useRef, type TextareaHTMLAttributes } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type TextareaHTMLAttributes } from 'react'
 
 interface Props extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'> {
   label: string
   hint?: string
   value: string
   onChange: (v: string) => void
+  /** Rendered inside the box, bottom-right (e.g. the voice recorder). */
+  addon?: ReactNode
 }
 
 /** Textarea that grows with its content. */
-export function AutoTextarea({ label, hint, value, onChange, ...rest }: Props) {
+export function AutoTextarea({ label, hint, value, onChange, addon, ...rest }: Props) {
   const id = useId()
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -21,7 +23,10 @@ export function AutoTextarea({ label, hint, value, onChange, ...rest }: Props) {
     <div className="field prompt">
       <label htmlFor={id}>{label}</label>
       {hint && <p className="field-hint">{hint}</p>}
-      <textarea id={id} ref={ref} rows={3} value={value} onChange={(e) => onChange(e.target.value)} {...rest} />
+      <div className={`textarea-wrap${addon ? ' has-addon' : ''}`}>
+        <textarea id={id} ref={ref} rows={3} value={value} onChange={(e) => onChange(e.target.value)} {...rest} />
+        {addon && <div className="textarea-addon">{addon}</div>}
+      </div>
     </div>
   )
 }

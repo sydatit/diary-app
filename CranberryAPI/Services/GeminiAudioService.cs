@@ -21,7 +21,7 @@ public class GeminiException : Exception
 
 public interface IGeminiAudioService
 {
-  Task<string> SummarizeAsync(IFormFile audioFile, CancellationToken ct = default);
+  Task<string> SummarizeAsync(IFormFile audioFile, string section = null, CancellationToken ct = default);
 }
 
 public class GeminiAudioService : IGeminiAudioService
@@ -34,7 +34,17 @@ public class GeminiAudioService : IGeminiAudioService
     "Quy tắc: 1. Lọc bỏ từ ngập ngừng (ờ, à, kiểu như...), giữ đúng sự kiện, suy nghĩ và cảm xúc chính. " +
     "2. Giữ nguyên ngôi xưng của người nói và giọng văn tự nhiên. " +
     "3. Trình bày dưới dạng gạch đầu dòng (-), mỗi dòng một ý. " +
+    "4. Chính tả: luôn viết \"Cha Mẹ\" (viết hoa chữ cái đầu cả hai từ) và viết \"Sion\" khi nghe \"si ôn\"/\"Si-ôn\". " +
     "Không tự bịa thêm thông tin và không viết câu mở đầu/kết thúc thừa thãi.";
+
+  /// <summary>Journal prompt the recording answers; keys match the web client's sections.</summary>
+  public static readonly IReadOnlyDictionary<string, string> SectionHints = new Dictionary<string, string>
+  {
+    ["reflection"] = "Đoạn ghi âm này dành cho mục \"Hôm nay thế nào?\": tóm tắt các sự việc, cách dùng thời gian và cảm xúc trong ngày.",
+    ["gratitude"] = "Đoạn ghi âm này dành cho mục \"Những điều biết ơn hôm nay\": mỗi dòng là một điều biết ơn.",
+    ["win"] = "Đoạn ghi âm này dành cho mục \"Những điều làm tốt hôm nay\": mỗi dòng là một việc đã làm tốt.",
+    ["improvement"] = "Đoạn ghi âm này dành cho mục \"Một điều cần làm tốt hơn\": viết điều người nói muốn cải thiện, ngắn gọn.",
+  };
 
   private readonly IHttpClientFactory _httpFactory;
   private readonly GeminiSettings _settings;
@@ -54,7 +64,7 @@ public class GeminiAudioService : IGeminiAudioService
     return string.IsNullOrEmpty(mime) || mime == "application/octet-stream" ? DefaultMimeType : mime;
   }
 
-  public async Task<string> SummarizeAsync(IFormFile audioFile, CancellationToken ct = default)
+  public async Task<string> SummarizeAsync(IFormFile audioFile, string section = null, CancellationToken ct = default)
   {
     if (string.IsNullOrWhiteSpace(_settings.ApiKey))
     {
@@ -77,7 +87,7 @@ public class GeminiAudioService : IGeminiAudioService
           parts = new object[]
           {
             new { inline_data = new { mime_type = NormalizeMimeType(audioFile.ContentType), data = base64 } },
-            new { text = Prompt }
+            new { text = section != null && SectionHints.TryGetValue(section, out string hint) ? $"{Prompt} {hint}" : Prompt }
           }
         }
       }

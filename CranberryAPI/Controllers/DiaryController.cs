@@ -21,12 +21,13 @@ public class DiaryController : ControllerBase
   }
 
   // POST: api/diary/voice-to-diary  (multipart/form-data, field "file")
+  // Optional field "section" (reflection|gratitude|win|improvement) tailors the prompt; unknown values are ignored.
   // Sends the recording to Gemini and returns bullet-point diary lines: { "summary": "- ..." }
   [HttpPost("voice-to-diary")]
   [Consumes("multipart/form-data")]
   [RequestSizeLimit(MaxAudioBytes)]
   [RequestFormLimits(MultipartBodyLengthLimit = MaxAudioBytes)]
-  public async Task<IActionResult> VoiceToDiary(IFormFile file, CancellationToken ct)
+  public async Task<IActionResult> VoiceToDiary(IFormFile file, [FromForm] string section, CancellationToken ct)
   {
     if (file == null || file.Length == 0)
     {
@@ -45,7 +46,8 @@ public class DiaryController : ControllerBase
 
     try
     {
-      string summary = await _gemini.SummarizeAsync(file, ct);
+      string knownSection = section != null && GeminiAudioService.SectionHints.ContainsKey(section) ? section : null;
+      string summary = await _gemini.SummarizeAsync(file, knownSection, ct);
       if (string.IsNullOrWhiteSpace(summary))
       {
         return UnprocessableEntity(new { status = "Error", message = "Không nghe rõ nội dung. Bạn thử ghi âm lại nhé." });

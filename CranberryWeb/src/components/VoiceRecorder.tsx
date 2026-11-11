@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, RotateCcw, Square } from 'lucide-react'
-import { Button } from './Button'
+import { Mic, RotateCcw, Square, X } from 'lucide-react'
 import { Spinner } from './Spinner'
-import { Alert } from './Alert'
-import { diaryApi } from '../api/diary'
+import { diaryApi, type DiarySection } from '../api/diary'
 import { ApiError } from '../api/client'
 
 type Status = 'idle' | 'recording' | 'processing' | 'error'
@@ -33,7 +31,17 @@ function micErrorMessage(err: unknown): string {
   return 'Không thể bật micro. Vui lòng thử lại.'
 }
 
-export function VoiceRecorder({ onSummary }: { onSummary: (text: string) => void }) {
+interface Props {
+  /** Which journal prompt this recording is for; tells the AI what kind of lines to write. */
+  section: DiarySection
+  onSummary: (text: string) => void
+  /** Another field is recording, so this mic is locked. */
+  disabled?: boolean
+  onBusyChange?: (busy: boolean) => void
+}
+
+/** Round mic button meant to sit inside a textarea (see AutoTextarea `addon`). */
+export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +54,14 @@ export function VoiceRecorder({ onSummary }: { onSummary: (text: string) => void
   // Keep the latest callback without re-creating the recorder handlers.
   const onSummaryRef = useRef(onSummary)
   onSummaryRef.current = onSummary
+  const onBusyRef = useRef(onBusyChange)
+  onBusyRef.current = onBusyChange
+
+  const busy = status === 'recording' || status === 'processing'
+  useEffect(() => {
+    onBusyRef.current?.(busy)
+  }, [busy])
+  useEffect(() => () => onBusyRef.current?.(false), [])
 
   const supported =
     typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'
@@ -134,7 +150,7 @@ export function VoiceRecorder({ onSummary }: { onSummary: (text: string) => void
     if (blob.size === 0) return fail('Không thu được âm thanh. Bạn thử ghi âm lại nhé.')
     setStatus('processing')
     try {
-      const summary = await diaryApi.voiceToDiary(blob)
+      const summary = await diaryApi.voiceToDiary(blob, section)
       if (unmountedRef.current) return
       onSummaryRef.current(summary)
       setStatus('idle')
@@ -145,42 +161,50 @@ export function VoiceRecorder({ onSummary }: { onSummary: (text: string) => void
   }
 
   return (
-    <div className="voice-recorder">
+    <div className="voice-mic-wrap">
       {status === 'idle' && (
-        <div className="voice-row">
-          <Button type="button" variant="secondary" icon={<Mic size={16} />} onClick={start}>
-            Bắt đầu ghi âm
-          </Button>
-          <span className="muted small">Kể về ngày của bạn, AI sẽ viết thành các dòng nhật ký.</span>
-        </div>
+        <button
+          type="button"
+          className="voice-mic"
+          onClick={start}
+          disabled={disabled}
+          aria-label="Ghi âm cho mục này"
+          title="Ghi âm cho mục này"
+        >
+          <Mic size={18} />
+        </button>
       )}
 
       {status === 'recording' && (
-        <div className="voice-row">
+        <>
           <span className="rec-indicator" aria-live="polite">
             <span className="rec-dot" aria-hidden />
             <span className="rec-timer">{formatTime(seconds)}</span>
           </span>
-          <Button type="button" variant="danger" icon={<Square size={14} />} onClick={stop}>
-            Dừng &amp; Tóm tắt
-          </Button>
-        </div>
+          <button type="button" className="voice-mic recording" onClick={stop} aria-label="Dừng và viết vào nhật ký" title="Dừng & viết">
+            <Square size={14} fill="currentColor" />
+          </button>
+        </>
       )}
 
       {status === 'processing' && (
-        <div className="voice-row" aria-live="polite">
+        <span className="voice-mic processing" aria-live="polite" aria-label="AI đang viết nhật ký..." title="AI đang viết nhật ký...">
           <Spinner size={16} />
-          <span className="muted">AI đang nghe và viết nhật ký...</span>
-        </div>
+        </span>
       )}
 
       {status === 'error' && (
-        <div className="voice-error">
-          <Alert>{error}</Alert>
-          <Button type="button" variant="ghost" icon={<RotateCcw size={14} />} onClick={() => setStatus('idle')}>
-            Thử lại
-          </Button>
-        </div>
+        <>
+          <div className="voice-error" role="alert">
+            <span>{error}</span>
+            <button type="button" className="voice-error-close" onClick={() => setStatus('idle')} aria-label="Đóng">
+              <X size={14} />
+            </button>
+          </div>
+          <button type="button" className="voice-mic" onClick={start} disabled={disabled} aria-label="Thử ghi âm lại" title="Thử lại">
+            <RotateCcw size={16} />
+          </button>
+        </>
       )}
     </div>
   )
