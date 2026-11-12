@@ -1,6 +1,9 @@
-using System.Net.Http.Headers;
+using System.Diagnostics;
+using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
 namespace CranberryAPI.Services;
@@ -11,6 +14,9 @@ public class GeminiSettings
   public string ApiKey { get; set; }
   // gemini-2.5-flash is closed to new API keys; override with Gemini__Model if needed.
   public string Model { get; set; } = "gemini-3.5-flash";
+  // "minimal" skips most of the model's thinking: ~2-3x faster and plenty for summarising a voice note.
+  // Override with Gemini__ThinkingLevel (minimal|low|medium|high); empty = model default.
+  public string ThinkingLevel { get; set; } = "minimal";
 }
 
 /// <summary>Gemini answered with an error or with no usable text.</summary>
@@ -22,6 +28,7 @@ public class GeminiException : Exception
 public interface IGeminiAudioService
 {
   Task<string> SummarizeAsync(IFormFile audioFile, string section = null, CancellationToken ct = default);
+  IAsyncEnumerable<string> StreamSummaryAsync(IFormFile audioFile, string section = null, CancellationToken ct = default);
 }
 
 public class GeminiAudioService : IGeminiAudioService
@@ -46,6 +53,8 @@ public class GeminiAudioService : IGeminiAudioService
     ["improvement"] = "Đoạn ghi âm này dành cho mục \"Một điều cần làm tốt hơn\": viết điều người nói muốn cải thiện, ngắn gọn.",
   };
 
+  private static readonly JsonSerializerOptions JsonOpts = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
   private readonly IHttpClientFactory _httpFactory;
   private readonly GeminiSettings _settings;
   private readonly ILogger<GeminiAudioService> _logger;
@@ -64,71 +73,148 @@ public class GeminiAudioService : IGeminiAudioService
     return string.IsNullOrEmpty(mime) || mime == "application/octet-stream" ? DefaultMimeType : mime;
   }
 
+  /// <summary>Waits for the whole answer (kept for the non-streaming endpoint).</summary>
   public async Task<string> SummarizeAsync(IFormFile audioFile, string section = null, CancellationToken ct = default)
+  {
+    var sb = new StringBuilder();
+    await foreach (string delta in StreamSummaryAsync(audioFile, section, ct))
+    {
+      sb.Append(delta);
+    }
+    return sb.ToString().Trim();
+  }
+
+  /// <summary>
+  /// Streams the answer as text deltas (streamGenerateContent + SSE), so the client can show words as they arrive.
+  /// Throws <see cref="GeminiException"/> before the first delta if Gemini rejects the request.
+  /// </summary>
+  public async IAsyncEnumerable<string> StreamSummaryAsync(IFormFile audioFile, string section = null,
+    [EnumeratorCancellation] CancellationToken ct = default)
   {
     if (string.IsNullOrWhiteSpace(_settings.ApiKey))
     {
       throw new InvalidOperationException("Gemini settings are missing (Gemini__ApiKey).");
     }
 
+    var sw = Stopwatch.StartNew();
     string base64;
     using (var ms = new MemoryStream())
     {
       await audioFile.CopyToAsync(ms, ct);
       base64 = Convert.ToBase64String(ms.GetBuffer(), 0, (int)ms.Length);
     }
+    long readMs = sw.ElapsedMilliseconds;
 
-    var payload = new
+    string mime = NormalizeMimeType(audioFile.ContentType);
+    string prompt = section != null && SectionHints.TryGetValue(section, out string hint) ? $"{Prompt} {hint}" : Prompt;
+    string level = string.IsNullOrWhiteSpace(_settings.ThinkingLevel) ? null : _settings.ThinkingLevel.Trim().ToLowerInvariant();
+
+    HttpResponseMessage res = await SendAsync(BuildPayload(mime, base64, prompt, level), ct);
+    if (res.StatusCode == HttpStatusCode.BadRequest && level != null)
     {
-      contents = new[]
-      {
-        new
-        {
-          parts = new object[]
-          {
-            new { inline_data = new { mime_type = NormalizeMimeType(audioFile.ContentType), data = base64 } },
-            new { text = section != null && SectionHints.TryGetValue(section, out string hint) ? $"{Prompt} {hint}" : Prompt }
-          }
-        }
-      }
-    };
-
-    string url = $"https://generativelanguage.googleapis.com/v1beta/models/{_settings.Model}:generateContent?key={Uri.EscapeDataString(_settings.ApiKey)}";
-    using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8);
-    content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-    HttpClient client = _httpFactory.CreateClient(HttpClientName);
-    using HttpResponseMessage res = await client.PostAsync(url, content, ct);
-    string body = await res.Content.ReadAsStringAsync(ct);
-
-    if (!res.IsSuccessStatusCode)
-    {
-      _logger.LogError("Gemini returned {Status}: {Body}", (int)res.StatusCode, body);
-      throw new GeminiException($"Gemini returned HTTP {(int)res.StatusCode}.");
+      // e.g. a model that does not accept this thinking level: retry once with the model's default.
+      string err = await res.Content.ReadAsStringAsync(ct);
+      res.Dispose();
+      _logger.LogWarning("Gemini rejected thinkingLevel={Level}, retrying without it: {Body}", level, err);
+      res = await SendAsync(BuildPayload(mime, base64, prompt, null), ct);
     }
 
-    // candidates[0].content.parts[0].text
+    using (res)
+    {
+      if (!res.IsSuccessStatusCode)
+      {
+        string body = await res.Content.ReadAsStringAsync(ct);
+        _logger.LogError("Gemini returned {Status}: {Body}", (int)res.StatusCode, body);
+        throw new GeminiException($"Gemini returned HTTP {(int)res.StatusCode}.");
+      }
+
+      long firstMs = -1;
+      int chars = 0;
+      using Stream stream = await res.Content.ReadAsStreamAsync(ct);
+      using var reader = new StreamReader(stream, Encoding.UTF8);
+      string line;
+      while ((line = await reader.ReadLineAsync()) != null)
+      {
+        ct.ThrowIfCancellationRequested();
+        if (!line.StartsWith("data:")) continue; // SSE: blank separators, comments
+
+        string text = ExtractText(line.Substring(5).Trim());
+        if (string.IsNullOrEmpty(text)) continue;
+        if (firstMs < 0) firstMs = sw.ElapsedMilliseconds;
+        chars += text.Length;
+        yield return text;
+      }
+
+      _logger.LogInformation(
+        "Voice-to-diary: {Bytes} B {Mime}, section={Section}, thinking={Level}, read={ReadMs}ms, first text={FirstMs}ms, total={TotalMs}ms, {Chars} chars",
+        audioFile.Length, mime, section ?? "-", level ?? "default", readMs, firstMs, sw.ElapsedMilliseconds, chars);
+
+      if (chars == 0)
+      {
+        throw new GeminiException("Gemini response contained no text.");
+      }
+    }
+  }
+
+  private static object BuildPayload(string mime, string base64, string prompt, string thinkingLevel) => new
+  {
+    contents = new[]
+    {
+      new
+      {
+        parts = new object[]
+        {
+          new { inline_data = new { mime_type = mime, data = base64 } },
+          new { text = prompt }
+        }
+      }
+    },
+    generationConfig = thinkingLevel == null ? null : new { thinkingConfig = new { thinkingLevel } }
+  };
+
+  private async Task<HttpResponseMessage> SendAsync(object payload, CancellationToken ct)
+  {
+    string url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(_settings.Model)}:streamGenerateContent?alt=sse";
+    var req = new HttpRequestMessage(HttpMethod.Post, url)
+    {
+      Content = new StringContent(JsonSerializer.Serialize(payload, JsonOpts), Encoding.UTF8, "application/json")
+    };
+    req.Headers.Add("x-goog-api-key", _settings.ApiKey); // header, so the key never shows up in URLs/logs
+    HttpClient client = _httpFactory.CreateClient(HttpClientName);
+    // ResponseHeadersRead: start reading as soon as Gemini sends the first chunk.
+    return await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+  }
+
+  /// <summary>Text of one SSE chunk: candidates[0].content.parts[*].text, skipping thought parts.</summary>
+  private string ExtractText(string json)
+  {
     try
     {
-      using JsonDocument doc = JsonDocument.Parse(body);
-      if (doc.RootElement.TryGetProperty("candidates", out JsonElement candidates) &&
-          candidates.ValueKind == JsonValueKind.Array && candidates.GetArrayLength() > 0 &&
-          candidates[0].TryGetProperty("content", out JsonElement c) &&
-          c.TryGetProperty("parts", out JsonElement parts) &&
-          parts.ValueKind == JsonValueKind.Array && parts.GetArrayLength() > 0 &&
-          parts[0].TryGetProperty("text", out JsonElement text))
+      using JsonDocument doc = JsonDocument.Parse(json);
+      if (!doc.RootElement.TryGetProperty("candidates", out JsonElement candidates) ||
+          candidates.ValueKind != JsonValueKind.Array || candidates.GetArrayLength() == 0)
       {
-        return text.GetString()?.Trim() ?? "";
+        // e.g. blocked by safety filters (promptFeedback.blockReason)
+        if (doc.RootElement.TryGetProperty("promptFeedback", out _)) _logger.LogWarning("Gemini chunk had no candidates: {Body}", json);
+        return null;
       }
+      if (!candidates[0].TryGetProperty("content", out JsonElement c) ||
+          !c.TryGetProperty("parts", out JsonElement parts) || parts.ValueKind != JsonValueKind.Array)
+      {
+        return null;
+      }
+      var sb = new StringBuilder();
+      foreach (JsonElement part in parts.EnumerateArray())
+      {
+        if (part.TryGetProperty("thought", out JsonElement th) && th.ValueKind == JsonValueKind.True) continue;
+        if (part.TryGetProperty("text", out JsonElement text)) sb.Append(text.GetString());
+      }
+      return sb.ToString();
     }
     catch (JsonException ex)
     {
-      _logger.LogError(ex, "Could not parse Gemini response: {Body}", body);
+      _logger.LogError(ex, "Could not parse Gemini chunk: {Body}", json);
       throw new GeminiException("Gemini response was not valid JSON.");
     }
-
-    // e.g. blocked by safety filters (promptFeedback.blockReason) or finishReason != STOP
-    _logger.LogWarning("Gemini response had no text: {Body}", body);
-    throw new GeminiException("Gemini response contained no text.");
   }
 }

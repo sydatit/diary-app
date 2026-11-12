@@ -70,43 +70,103 @@ function fallbackError(status: number): [string, string] {
   return ['Something went wrong.', 'error.generic']
 }
 
-export async function api<T = void>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+function authHeaders(json: boolean): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  // FormData goes as-is: the browser sets multipart Content-Type with its boundary.
-  const isForm = options.body instanceof FormData
-  if (options.body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
+  if (json) headers['Content-Type'] = 'application/json'
   const token = session.token
   if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
 
-  let res: Response
+async function send(path: string, method: string, body: unknown, accept?: string): Promise<Response> {
+  // FormData goes as-is: the browser sets multipart Content-Type with its boundary.
+  const isForm = body instanceof FormData
+  const headers = authHeaders(body !== undefined && !isForm)
+  if (accept) headers.Accept = accept
   try {
-    res = await fetch(`${BASE}${path}`, {
-      method: options.method ?? 'GET',
+    return await fetch(`${BASE}${path}`, {
+      method,
       headers,
-      body: isForm ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
     })
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Check your connection.', undefined, 'error.network')
   }
+}
 
+async function readBody(res: Response): Promise<unknown> {
   const text = await res.text()
-  let body: unknown = null
-  if (text) {
-    try {
-      body = JSON.parse(text)
-    } catch {
-      body = text
-    }
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
   }
+}
 
-  if (!res.ok) {
-    if (res.status === 401 && token) onUnauthorized?.()
-    const message = extractMessage(body)
-    if (message) throw new ApiError(res.status, message, body)
-    const [text, key] = fallbackError(res.status)
-    throw new ApiError(res.status, text, body, key)
-  }
+function toError(res: Response, body: unknown): ApiError {
+  if (res.status === 401 && session.token) onUnauthorized?.()
+  const message = extractMessage(body)
+  if (message) return new ApiError(res.status, message, body)
+  const [text, key] = fallbackError(res.status)
+  return new ApiError(res.status, text, body, key)
+}
+
+export async function api<T = void>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+  const res = await send(path, options.method ?? 'GET', options.body)
+  const body = await readBody(res)
+  if (!res.ok) throw toError(res, body)
   return body as T
+}
+
+/**
+ * POST and read a Server-Sent Events reply, calling `onEvent` for each event as it arrives.
+ * A non-2xx reply (sent before streaming starts) throws an ApiError like `api()`.
+ */
+export async function apiStream(
+  path: string,
+  body: unknown,
+  onEvent: (event: string, data: unknown) => void,
+): Promise<void> {
+  const res = await send(path, 'POST', body, 'text/event-stream')
+  if (!res.ok) throw toError(res, await readBody(res))
+  if (!res.body) throw new ApiError(0, 'Streaming is not supported in this browser.', undefined, 'error.generic')
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buf = ''
+  const flush = (frame: string) => {
+    let event = 'message'
+    const data: string[] = []
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+    }
+    if (!data.length) return
+    let parsed: unknown = data.join('\n')
+    try {
+      parsed = JSON.parse(parsed as string)
+    } catch {
+      /* plain text payload */
+    }
+    onEvent(event, parsed)
+  }
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += value.replace(/\r\n?/g, '\n')
+      let i: number
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        flush(buf.slice(0, i))
+        buf = buf.slice(i + 2)
+      }
+    }
+  } catch (err) {
+    reader.cancel().catch(() => {})
+    if (err instanceof ApiError) throw err
+    throw new ApiError(0, 'Cannot reach the server. Check your connection.', undefined, 'error.network')
+  }
+  if (buf.trim()) flush(buf)
 }
 
 /** Read the `exp` claim (seconds) from a JWT without verifying it. */

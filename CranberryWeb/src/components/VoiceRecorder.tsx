@@ -33,14 +33,19 @@ function micErrorKey(err: unknown): TKey {
 interface Props {
   /** Which journal prompt this recording is for; tells the AI what kind of lines to write. */
   section: DiarySection
+  /** Final AI text, once it is complete. */
   onSummary: (text: string) => void
+  /** The AI text so far, while it is still being written (each call has the whole text, not a piece). */
+  onPartial?: (soFar: string) => void
+  /** Streaming failed after `onPartial` was called: drop the partial text. */
+  onAbort?: () => void
   /** Another field is recording, so this mic is locked. */
   disabled?: boolean
   onBusyChange?: (busy: boolean) => void
 }
 
 /** Round mic button meant to sit inside a textarea (see AutoTextarea `addon`). */
-export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Props) {
+export function VoiceRecorder({ section, onSummary, onPartial, onAbort, disabled, onBusyChange }: Props) {
   const { t } = useI18n()
   const [status, setStatus] = useState<Status>('idle')
   const [seconds, setSeconds] = useState(0)
@@ -56,6 +61,10 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   onSummaryRef.current = onSummary
   const onBusyRef = useRef(onBusyChange)
   onBusyRef.current = onBusyChange
+  const onPartialRef = useRef(onPartial)
+  onPartialRef.current = onPartial
+  const onAbortRef = useRef(onAbort)
+  onAbortRef.current = onAbort
 
   const busy = status === 'recording' || status === 'processing'
   useEffect(() => {
@@ -149,13 +158,20 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   async function submit(blob: Blob) {
     if (blob.size === 0) return fail(t('voice.empty'))
     setStatus('processing')
+    let streamed = false
     try {
-      const summary = await diaryApi.voiceToDiary(blob, section)
+      // Stream so the text starts appearing in the box within a second or two instead of all at the end.
+      const summary = await diaryApi.voiceToDiaryStream(blob, section, (soFar) => {
+        if (unmountedRef.current) return
+        streamed = true
+        onPartialRef.current?.(soFar)
+      })
       if (unmountedRef.current) return
       onSummaryRef.current(summary)
       setStatus('idle')
     } catch (err) {
       if (unmountedRef.current) return
+      if (streamed) onAbortRef.current?.()
       fail(errorText(err, t, 'voice.failed'))
     }
   }

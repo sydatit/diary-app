@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -95,10 +95,36 @@ export default function EntryEditor() {
 
   const set = <K extends keyof JournalInput>(k: K, v: JournalInput[K]) => setForm((f) => ({ ...f, [k]: v }))
   // Voice summary: append its lines to the end of that field so the user can review before saving.
-  // Functional update keeps anything typed while the AI was working.
+  // While the AI is still writing, the text so far is shown after what was in the box when it started
+  // (`voiceBase`); the box is read-only during that so nothing typed gets overwritten.
+  const formRef = useRef(form)
+  formRef.current = form
+  const voiceBase = useRef<Partial<Record<TextField, string>>>({})
+  const [streamingField, setStreamingField] = useState<TextField | null>(null)
+
+  function showVoice(field: TextField, maxLength: number, base: string, text: string) {
+    setForm((f) => ({ ...f, [field]: appendLines(base, normalizeVoiceText(text)).slice(0, maxLength) }))
+  }
+  function partialVoice(field: TextField, maxLength: number, soFar: string) {
+    if (voiceBase.current[field] === undefined) {
+      voiceBase.current[field] = formRef.current[field] ?? ''
+      setStreamingField(field)
+    }
+    showVoice(field, maxLength, voiceBase.current[field]!, soFar)
+  }
+  function endVoice(field: TextField) {
+    const base = voiceBase.current[field]
+    delete voiceBase.current[field]
+    setStreamingField((cur) => (cur === field ? null : cur))
+    return base
+  }
   function addVoice(field: TextField, maxLength: number, summary: string) {
-    setForm((f) => ({ ...f, [field]: appendLines(f[field] ?? '', normalizeVoiceText(summary)).slice(0, maxLength) }))
+    showVoice(field, maxLength, endVoice(field) ?? formRef.current[field] ?? '', summary)
     toast(t('editor.voiceAdded'))
+  }
+  function abortVoice(field: TextField) {
+    const base = endVoice(field)
+    if (base !== undefined) setForm((f) => ({ ...f, [field]: base }))
   }
   const clash = isNew ? findByDate(existing, form.date) : undefined
 
@@ -186,12 +212,16 @@ export default function EntryEditor() {
               value={form[field] ?? ''}
               onChange={(v) => set(field, v)}
               maxLength={maxLength}
+              readOnly={streamingField === field}
+              aria-busy={streamingField === field}
               addon={
                 <VoiceRecorder
                   section={section}
                   disabled={voiceField !== null && voiceField !== field}
                   onBusyChange={(busy) => setVoiceField((cur) => (busy ? field : cur === field ? null : cur))}
+                  onPartial={(text) => partialVoice(field, maxLength, text)}
                   onSummary={(text) => addVoice(field, maxLength, text)}
+                  onAbort={() => abortVoice(field)}
                 />
               }
             />
@@ -203,7 +233,7 @@ export default function EntryEditor() {
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" loading={saving} disabled={!!clash}>
+          <Button type="submit" loading={saving} disabled={!!clash || streamingField !== null}>
             {t(isNew ? 'editor.saveNew' : 'common.saveChanges')}
           </Button>
         </div>
