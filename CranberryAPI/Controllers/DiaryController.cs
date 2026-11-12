@@ -139,6 +139,10 @@ public class DiaryController : ControllerBase
   /// <summary>Known failures -> HTTP response; null for anything unexpected (let it bubble).</summary>
   private IActionResult MapError(Exception ex)
   {
+    if (ex is NoSpeechException)
+    {
+      return UnprocessableEntity(new { status = "Error", message = NotHeard });
+    }
     if (ex is InvalidOperationException)
     {
       _logger.LogError(ex, "Gemini is not configured");

@@ -9,6 +9,48 @@ type Status = 'idle' | 'recording' | 'processing' | 'error'
 /** ~10 min of opus/aac stays well under the API's 20MB limit. */
 const MAX_SECONDS = 600
 
+/**
+ * Loudest 100ms (RMS, 0..1) must reach this, or the clip is treated as silence and not sent:
+ * Gemini makes up a whole diary entry for a silent clip. Speech is ~0.05-0.3, a quiet room ~0.001-0.005.
+ */
+const SPEECH_RMS = 0.01
+
+/** Tracks the loudest moment of a stream. `heard()` is null if the meter couldn't run (then don't block). */
+function startLevelMeter(stream: MediaStream) {
+  let ctx: AudioContext | null = null
+  let timer: number | null = null
+  let peak = 0
+  let measured = false
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (Ctx) {
+      ctx = new Ctx()
+      void ctx.resume().catch(() => {})
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 2048
+      ctx.createMediaStreamSource(stream).connect(analyser)
+      const buf = new Float32Array(analyser.fftSize)
+      timer = window.setInterval(() => {
+        if (ctx?.state !== 'running') return // a suspended context reads zeros; don't count those
+        analyser.getFloatTimeDomainData(buf)
+        let sum = 0
+        for (const v of buf) sum += v * v
+        peak = Math.max(peak, Math.sqrt(sum / buf.length))
+        measured = true
+      }, 100)
+    }
+  } catch {
+    ctx = null
+  }
+  return {
+    heard: (): boolean | null => (measured ? peak >= SPEECH_RMS : null),
+    stop() {
+      if (timer !== null) window.clearInterval(timer)
+      void ctx?.close().catch(() => {})
+    },
+  }
+}
+
 /** Chrome/Edge/Firefox -> webm/opus, Safari/iOS -> mp4. */
 function pickMimeType(): string | undefined {
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
@@ -55,6 +97,7 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, disabled
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
+  const meterRef = useRef<ReturnType<typeof startLevelMeter> | null>(null)
   const unmountedRef = useRef(false)
   // Keep the latest callback without re-creating the recorder handlers.
   const onSummaryRef = useRef(onSummary)
@@ -78,6 +121,8 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, disabled
   function cleanup() {
     if (timerRef.current !== null) window.clearInterval(timerRef.current)
     timerRef.current = null
+    meterRef.current?.stop()
+    meterRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop()) // turn the mic indicator off
     streamRef.current = null
   }
@@ -130,12 +175,15 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, disabled
       if (e.data.size > 0) chunksRef.current.push(e.data)
     }
     recorder.onstop = () => {
+      const heard = meterRef.current?.heard() ?? null
       cleanup()
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' })
       chunksRef.current = []
+      if (heard === false) return fail(t('voice.noSpeech')) // nothing above room noise: don't send it
       void submit(blob)
     }
 
+    meterRef.current = startLevelMeter(stream)
     recorder.start(1000) // emit chunks every second so nothing is lost if the tab stalls
     setSeconds(0)
     setStatus('recording')

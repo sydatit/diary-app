@@ -25,6 +25,12 @@ public class GeminiException : Exception
   public GeminiException(string message) : base(message) { }
 }
 
+/// <summary>The recording has no speech (silence, noise, music...), so there is nothing to write.</summary>
+public class NoSpeechException : Exception
+{
+  public NoSpeechException() : base("The recording contains no speech.") { }
+}
+
 public interface IGeminiAudioService
 {
   Task<string> SummarizeAsync(IFormFile audioFile, string section = null, CancellationToken ct = default);
@@ -43,6 +49,15 @@ public class GeminiAudioService : IGeminiAudioService
     "3. Trình bày dưới dạng gạch đầu dòng (-), mỗi dòng một ý. " +
     "4. Chính tả: luôn viết \"Cha Mẹ\" (viết hoa chữ cái đầu cả hai từ) và viết \"Sion\" khi nghe \"si ôn\"/\"Si-ôn\". " +
     "Không tự bịa thêm thông tin và không viết câu mở đầu/kết thúc thừa thãi.";
+
+  /// <summary>What Gemini answers when it hears no speech; never shown to the user.</summary>
+  public const string NoSpeechMarker = "NO_SPEECH";
+
+  // Goes last so it overrides the section hint: without it Gemini invents a whole diary entry for a silent clip.
+  private const string NoSpeechRule =
+    "QUAN TRỌNG: Chỉ ghi lại những gì người nói thực sự nói. Nếu đoạn ghi âm không có lời nói nghe rõ " +
+    "(im lặng, tiếng ồn, tiếng bíp, nhạc, hoặc quá ngắn/không nghe ra từ nào), chỉ trả lời đúng một từ " +
+    NoSpeechMarker + " và không viết gì thêm. Tuyệt đối không tự nghĩ ra nội dung nhật ký.";
 
   /// <summary>Journal prompt the recording answers; keys match the web client's sections.</summary>
   public static readonly IReadOnlyDictionary<string, string> SectionHints = new Dictionary<string, string>
@@ -106,7 +121,9 @@ public class GeminiAudioService : IGeminiAudioService
     long readMs = sw.ElapsedMilliseconds;
 
     string mime = NormalizeMimeType(audioFile.ContentType);
-    string prompt = section != null && SectionHints.TryGetValue(section, out string hint) ? $"{Prompt} {hint}" : Prompt;
+    string prompt = section != null && SectionHints.TryGetValue(section, out string hint)
+      ? $"{Prompt} {hint} {NoSpeechRule}"
+      : $"{Prompt} {NoSpeechRule}";
     string level = string.IsNullOrWhiteSpace(_settings.ThinkingLevel) ? null : _settings.ThinkingLevel.Trim().ToLowerInvariant();
 
     HttpResponseMessage res = await SendAsync(BuildPayload(mime, base64, prompt, level), ct);
@@ -130,6 +147,9 @@ public class GeminiAudioService : IGeminiAudioService
 
       long firstMs = -1;
       int chars = 0;
+      // Hold the start back until it can't be the NO_SPEECH marker, so the marker never reaches the client.
+      var head = new StringBuilder();
+      bool released = false;
       using Stream stream = await res.Content.ReadAsStreamAsync(ct);
       using var reader = new StreamReader(stream, Encoding.UTF8);
       string line;
@@ -140,20 +160,46 @@ public class GeminiAudioService : IGeminiAudioService
 
         string text = ExtractText(line.Substring(5).Trim());
         if (string.IsNullOrEmpty(text)) continue;
+        if (!released)
+        {
+          head.Append(text);
+          if (CouldBeNoSpeech(head.ToString())) continue;
+          released = true;
+          text = head.ToString();
+        }
         if (firstMs < 0) firstMs = sw.ElapsedMilliseconds;
         chars += text.Length;
         yield return text;
       }
 
+      bool noSpeech = !released && CouldBeNoSpeech(head.ToString());
       _logger.LogInformation(
-        "Voice-to-diary: {Bytes} B {Mime}, section={Section}, thinking={Level}, read={ReadMs}ms, first text={FirstMs}ms, total={TotalMs}ms, {Chars} chars",
-        audioFile.Length, mime, section ?? "-", level ?? "default", readMs, firstMs, sw.ElapsedMilliseconds, chars);
+        "Voice-to-diary: {Bytes} B {Mime}, section={Section}, thinking={Level}, read={ReadMs}ms, first text={FirstMs}ms, total={TotalMs}ms, {Chars} chars{NoSpeech}",
+        audioFile.Length, mime, section ?? "-", level ?? "default", readMs, firstMs, sw.ElapsedMilliseconds, chars,
+        noSpeech ? ", no speech" : "");
 
-      if (chars == 0)
+      if (noSpeech)
       {
-        throw new GeminiException("Gemini response contained no text.");
+        throw new NoSpeechException();
+      }
+      if (!released)
+      {
+        // Short answer that turned out not to be the marker.
+        yield return head.ToString();
       }
     }
+  }
+
+  private static readonly char[] MarkerNoise = { ' ', '\n', '\r', '\t', '`', '"', '\'', '*', '.', '-' };
+
+  /// <summary>True while `text` is empty, a prefix of the marker, or the marker itself (ignoring quotes/punctuation).</summary>
+  public static bool CouldBeNoSpeech(string text)
+  {
+    string t = text.Trim(MarkerNoise);
+    return t.Length == 0 ||
+           (t.Length <= NoSpeechMarker.Length
+             ? NoSpeechMarker.StartsWith(t, StringComparison.OrdinalIgnoreCase)
+             : t.Equals(NoSpeechMarker, StringComparison.OrdinalIgnoreCase));
   }
 
   private static object BuildPayload(string mime, string base64, string prompt, string thinkingLevel) => new
