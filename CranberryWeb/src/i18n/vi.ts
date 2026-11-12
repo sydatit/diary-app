@@ -161,6 +161,8 @@ export const vi: Record<TKey, string> = {
   'voice.unsupported': 'Trình duyệt này không hỗ trợ ghi âm. Hãy dùng Chrome, Edge, Firefox hoặc Safari mới.',
   'voice.formatUnsupported': 'Trình duyệt không ghi âm được định dạng được hỗ trợ.',
   'voice.empty': 'Không thu được âm thanh. Bạn thử ghi âm lại nhé.',
+  'voice.noSpeech': 'Không nghe thấy tiếng nói. Bạn kiểm tra micro rồi thử lại nhé.',
+  'voice.listening': 'Đang nghe… chữ sẽ hiện trong ô',
   'voice.failed': 'Có lỗi xảy ra. Vui lòng thử lại.',
 
   // ---- Levels & moods ----

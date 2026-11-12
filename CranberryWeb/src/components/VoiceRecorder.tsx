@@ -3,11 +3,54 @@ import { Mic, RotateCcw, Square, X } from 'lucide-react'
 import { Spinner } from './Spinner'
 import { diaryApi, type DiarySection } from '../api/diary'
 import { errorText, useI18n, type TKey } from '../i18n'
+import { isSpeechSupported, speechLang, startLiveTranscript, type LiveTranscript, type SpeechFailure } from '../lib/speech'
 
 type Status = 'idle' | 'recording' | 'processing' | 'error'
 
 /** ~10 min of opus/aac stays well under the API's 20MB limit. */
 const MAX_SECONDS = 600
+
+/**
+ * Loudest 100ms (RMS, 0..1) must reach this, or the clip is treated as silence and not sent:
+ * Gemini makes up a whole diary entry for a silent clip. Speech is ~0.05-0.3, a quiet room ~0.001-0.005.
+ */
+const SPEECH_RMS = 0.01
+
+/** Tracks the loudest moment of a stream. `heard()` is null if the meter couldn't run (then don't block). */
+function startLevelMeter(stream: MediaStream) {
+  let ctx: AudioContext | null = null
+  let timer: number | null = null
+  let peak = 0
+  let measured = false
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (Ctx) {
+      ctx = new Ctx()
+      void ctx.resume().catch(() => {})
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 2048
+      ctx.createMediaStreamSource(stream).connect(analyser)
+      const buf = new Float32Array(analyser.fftSize)
+      timer = window.setInterval(() => {
+        if (ctx?.state !== 'running') return // a suspended context reads zeros; don't count those
+        analyser.getFloatTimeDomainData(buf)
+        let sum = 0
+        for (const v of buf) sum += v * v
+        peak = Math.max(peak, Math.sqrt(sum / buf.length))
+        measured = true
+      }, 100)
+    }
+  } catch {
+    ctx = null
+  }
+  return {
+    heard: (): boolean | null => (measured ? peak >= SPEECH_RMS : null),
+    stop() {
+      if (timer !== null) window.clearInterval(timer)
+      void ctx?.close().catch(() => {})
+    },
+  }
+}
 
 /** Chrome/Edge/Firefox -> webm/opus, Safari/iOS -> mp4. */
 function pickMimeType(): string | undefined {
@@ -33,15 +76,22 @@ function micErrorKey(err: unknown): TKey {
 interface Props {
   /** Which journal prompt this recording is for; tells the AI what kind of lines to write. */
   section: DiarySection
+  /** Final AI text, once it is complete. */
   onSummary: (text: string) => void
+  /** The AI text so far, while it is still being written (each call has the whole text, not a piece). */
+  onPartial?: (soFar: string) => void
+  /** Streaming failed after `onPartial` was called: drop the partial text. */
+  onAbort?: () => void
+  /** Raw words heard so far while the user is still speaking (browser speech recognition); null = stop showing them. */
+  onLive?: (text: string | null) => void
   /** Another field is recording, so this mic is locked. */
   disabled?: boolean
   onBusyChange?: (busy: boolean) => void
 }
 
 /** Round mic button meant to sit inside a textarea (see AutoTextarea `addon`). */
-export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Props) {
-  const { t } = useI18n()
+export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, disabled, onBusyChange }: Props) {
+  const { t, lang } = useI18n()
   const [status, setStatus] = useState<Status>('idle')
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -50,12 +100,20 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
+  const meterRef = useRef<ReturnType<typeof startLevelMeter> | null>(null)
+  const liveRef = useRef<LiveTranscript | null>(null)
   const unmountedRef = useRef(false)
   // Keep the latest callback without re-creating the recorder handlers.
   const onSummaryRef = useRef(onSummary)
   onSummaryRef.current = onSummary
   const onBusyRef = useRef(onBusyChange)
   onBusyRef.current = onBusyChange
+  const onPartialRef = useRef(onPartial)
+  onPartialRef.current = onPartial
+  const onAbortRef = useRef(onAbort)
+  onAbortRef.current = onAbort
+  const onLiveRef = useRef(onLive)
+  onLiveRef.current = onLive
 
   const busy = status === 'recording' || status === 'processing'
   useEffect(() => {
@@ -69,6 +127,8 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   function cleanup() {
     if (timerRef.current !== null) window.clearInterval(timerRef.current)
     timerRef.current = null
+    meterRef.current?.stop()
+    meterRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop()) // turn the mic indicator off
     streamRef.current = null
   }
@@ -82,17 +142,64 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
         rec.onstop = null
         rec.stop()
       }
+      liveRef.current?.abort()
+      liveRef.current = null
       cleanup()
     }
   }, [])
 
   function fail(message: string) {
     cleanup()
+    onLiveRef.current?.(null)
     setError(message)
     setStatus('error')
   }
 
-  async function start() {
+  function startTimer() {
+    setSeconds(0)
+    setStatus('recording')
+    timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000)
+  }
+
+  function start() {
+    // Prefer live transcription: words show up while speaking and only text is sent at the end.
+    if (isSpeechSupported() && startLive()) return
+    void startAudio()
+  }
+
+  /** Browser speech recognition. Returns false if it couldn't even start (then record audio instead). */
+  function startLive(): boolean {
+    setError(null)
+    try {
+      liveRef.current = startLiveTranscript({
+        lang: speechLang(lang),
+        onText: (text) => {
+          if (!unmountedRef.current) onLiveRef.current?.(text)
+        },
+        onError: (kind, text) => {
+          if (!unmountedRef.current) onLiveError(kind, text)
+        },
+      })
+    } catch {
+      liveRef.current = null
+      return false
+    }
+    startTimer()
+    return true
+  }
+
+  function onLiveError(kind: SpeechFailure, text: string) {
+    liveRef.current = null
+    if (timerRef.current !== null) window.clearInterval(timerRef.current)
+    timerRef.current = null
+    if (kind === 'denied') return fail(t('voice.micDenied'))
+    // Service gave up midway: use what it heard. Nothing heard yet: switch to recording audio, no extra tap needed.
+    if (text.trim()) return void submitText(text)
+    onLiveRef.current?.(null)
+    void startAudio()
+  }
+
+  async function startAudio() {
     if (!supported) return fail(t('voice.unsupported'))
     setError(null)
     let stream: MediaStream
@@ -121,16 +228,17 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
       if (e.data.size > 0) chunksRef.current.push(e.data)
     }
     recorder.onstop = () => {
+      const heard = meterRef.current?.heard() ?? null
       cleanup()
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' })
       chunksRef.current = []
+      if (heard === false) return fail(t('voice.noSpeech')) // nothing above room noise: don't send it
       void submit(blob)
     }
 
+    meterRef.current = startLevelMeter(stream)
     recorder.start(1000) // emit chunks every second so nothing is lost if the tab stalls
-    setSeconds(0)
-    setStatus('recording')
-    timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000)
+    startTimer()
   }
 
   // Auto-stop at the length limit.
@@ -139,6 +247,16 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
   }, [status, seconds])
 
   function stop() {
+    const live = liveRef.current
+    if (live) {
+      liveRef.current = null
+      cleanup()
+      setStatus('processing')
+      void live.stop().then((text) => {
+        if (!unmountedRef.current) void submitText(text)
+      })
+      return
+    }
     const rec = recorderRef.current
     if (rec && rec.state !== 'inactive') {
       setStatus('processing')
@@ -148,14 +266,31 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
 
   async function submit(blob: Blob) {
     if (blob.size === 0) return fail(t('voice.empty'))
+    await runStream((onText) => diaryApi.voiceToDiaryStream(blob, section, onText))
+  }
+
+  async function submitText(text: string) {
+    if (!text.trim()) return fail(t('voice.noSpeech'))
+    await runStream((onText) => diaryApi.textToDiaryStream(text, section, onText))
+  }
+
+  /** Stream the AI text into the box as it is written. */
+  async function runStream(call: (onText: (soFar: string) => void) => Promise<string>) {
     setStatus('processing')
+    let streamed = false
     try {
-      const summary = await diaryApi.voiceToDiary(blob, section)
+      const summary = await call((soFar) => {
+        if (unmountedRef.current) return
+        streamed = true
+        onPartialRef.current?.(soFar)
+      })
       if (unmountedRef.current) return
+      onLiveRef.current?.(null)
       onSummaryRef.current(summary)
       setStatus('idle')
     } catch (err) {
       if (unmountedRef.current) return
+      if (streamed) onAbortRef.current?.()
       fail(errorText(err, t, 'voice.failed'))
     }
   }
@@ -177,7 +312,7 @@ export function VoiceRecorder({ section, onSummary, disabled, onBusyChange }: Pr
 
       {status === 'recording' && (
         <>
-          <span className="rec-indicator" aria-live="polite">
+          <span className="rec-indicator" aria-live="polite" title={liveRef.current ? t('voice.listening') : undefined}>
             <span className="rec-dot" aria-hidden />
             <span className="rec-timer">{formatTime(seconds)}</span>
           </span>
