@@ -160,6 +160,7 @@ export const en = {
   'voice.formatUnsupported': "This browser can't record in a supported format.",
   'voice.empty': 'No audio was captured. Please try recording again.',
   'voice.noSpeech': "We couldn't hear anything. Check your microphone and try again.",
+  'voice.listening': 'Listening… your words appear in the box',
   'voice.failed': 'Something went wrong. Please try again.',
 
   // ---- Levels & moods ----

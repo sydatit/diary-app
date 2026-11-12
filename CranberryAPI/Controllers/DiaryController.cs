@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using CranberryAPI.Models;
 using CranberryAPI.Services;
 
 namespace CranberryAPI.Controllers;
@@ -11,6 +12,7 @@ namespace CranberryAPI.Controllers;
 public class DiaryController : ControllerBase
 {
   private const long MaxAudioBytes = 20_000_000;
+  private const int MaxTranscriptChars = 20_000;
 
   private readonly IGeminiAudioService _gemini;
   private readonly ILogger<DiaryController> _logger;
@@ -35,8 +37,7 @@ public class DiaryController : ControllerBase
 
     try
     {
-      string knownSection = section != null && GeminiAudioService.SectionHints.ContainsKey(section) ? section : null;
-      string summary = await _gemini.SummarizeAsync(file, knownSection, ct);
+      string summary = await _gemini.SummarizeAsync(file, KnownSection(section), ct);
       if (string.IsNullOrWhiteSpace(summary))
       {
         return UnprocessableEntity(new { status = "Error", message = NotHeard });
@@ -70,10 +71,37 @@ public class DiaryController : ControllerBase
       return;
     }
 
-    string knownSection = section != null && GeminiAudioService.SectionHints.ContainsKey(section) ? section : null;
-    await using IAsyncEnumerator<string> pieces = _gemini.StreamSummaryAsync(file, knownSection, ct).GetAsyncEnumerator(ct);
+    await StreamSseAsync(_gemini.StreamSummaryAsync(file, KnownSection(section), ct), ct);
+  }
 
-    // Wait for the first piece so failures can still use a proper HTTP status.
+  // POST: api/diary/text-to-diary/stream  (JSON { "text": "...", "section": "reflection" })
+  // For a transcript the browser already made while the user spoke (Web Speech API): no audio upload,
+  // so the diary lines come back almost at once. Same SSE reply as voice-to-diary/stream.
+  [HttpPost("text-to-diary/stream")]
+  public async Task TextToDiaryStream([FromBody] TextToDiaryDto dto, CancellationToken ct)
+  {
+    string text = dto?.Text?.Trim();
+    if (string.IsNullOrEmpty(text))
+    {
+      await UnprocessableEntity(new { status = "Error", message = NotHeard }).ExecuteResultAsync(ControllerContext);
+      return;
+    }
+    if (text.Length > MaxTranscriptChars)
+    {
+      await StatusCode(413, new { status = "Error", message = "Đoạn ghi âm quá dài." }).ExecuteResultAsync(ControllerContext);
+      return;
+    }
+    await StreamSseAsync(_gemini.StreamTextSummaryAsync(text, KnownSection(dto.Section), ct), ct);
+  }
+
+  private static string KnownSection(string section) =>
+    section != null && GeminiAudioService.SectionHints.ContainsKey(section) ? section : null;
+
+  /// <summary>Relay text pieces as SSE. Waits for the first piece so failures before it get a proper HTTP status.</summary>
+  private async Task StreamSseAsync(IAsyncEnumerable<string> source, CancellationToken ct)
+  {
+    await using IAsyncEnumerator<string> pieces = source.GetAsyncEnumerator(ct);
+
     bool hasFirst;
     try
     {
@@ -107,7 +135,7 @@ public class DiaryController : ControllerBase
     }
     catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
     {
-      _logger.LogError(ex, "Voice-to-diary stream broke midway");
+      _logger.LogError(ex, "Diary stream broke midway");
       await WriteEventAsync("error", new { message = Failed }, CancellationToken.None);
     }
   }

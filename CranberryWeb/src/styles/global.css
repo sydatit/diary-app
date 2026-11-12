@@ -1459,6 +1459,45 @@ input::placeholder {
 .textarea-wrap.has-addon textarea {
   padding-bottom: 54px;
 }
+/* Look-alike of the textarea while speech is being transcribed live (see AutoTextarea `live`). */
+.textarea-live {
+  width: 100%;
+  min-height: 84px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.textarea-wrap.has-addon .textarea-live {
+  padding-bottom: 54px;
+}
+.live-text {
+  color: var(--muted);
+  font-style: italic;
+}
+.live-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: live-caret-blink 1s steps(1) infinite;
+}
+@keyframes live-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-caret {
+    animation: none;
+  }
+}
 .textarea-addon {
   position: absolute;
   right: 8px;

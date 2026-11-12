@@ -101,11 +101,14 @@ export default function EntryEditor() {
   formRef.current = form
   const voiceBase = useRef<Partial<Record<TextField, string>>>({})
   const [streamingField, setStreamingField] = useState<TextField | null>(null)
+  // Raw words heard while the user is still speaking (browser speech recognition), shown faded in that box.
+  const [live, setLive] = useState<{ field: TextField; text: string } | null>(null)
 
   function showVoice(field: TextField, maxLength: number, base: string, text: string) {
     setForm((f) => ({ ...f, [field]: appendLines(base, normalizeVoiceText(text)).slice(0, maxLength) }))
   }
   function partialVoice(field: TextField, maxLength: number, soFar: string) {
+    setLive((cur) => (cur?.field === field ? null : cur)) // the AI's lines take over from the raw words
     if (voiceBase.current[field] === undefined) {
       voiceBase.current[field] = formRef.current[field] ?? ''
       setStreamingField(field)
@@ -214,6 +217,7 @@ export default function EntryEditor() {
               maxLength={maxLength}
               readOnly={streamingField === field}
               aria-busy={streamingField === field}
+              live={live?.field === field ? live.text : undefined}
               addon={
                 <VoiceRecorder
                   section={section}
@@ -222,6 +226,7 @@ export default function EntryEditor() {
                   onPartial={(text) => partialVoice(field, maxLength, text)}
                   onSummary={(text) => addVoice(field, maxLength, text)}
                   onAbort={() => abortVoice(field)}
+                  onLive={(text) => setLive((cur) => (text === null ? (cur?.field === field ? null : cur) : { field, text }))}
                 />
               }
             />
@@ -233,7 +238,7 @@ export default function EntryEditor() {
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" loading={saving} disabled={!!clash || streamingField !== null}>
+          <Button type="submit" loading={saving} disabled={!!clash || streamingField !== null || live !== null}>
             {t(isNew ? 'editor.saveNew' : 'common.saveChanges')}
           </Button>
         </div>
