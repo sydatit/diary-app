@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using CranberryAPI.Controllers;
 using CranberryAPI.Models;
 using CranberryAPI.Services;
 using System.Text;
@@ -66,6 +67,28 @@ builder.Services.AddAuthentication(options =>
     ValidAudience = builder.Configuration["JWT:ValidAudience"],
     ValidIssuer = builder.Configuration["JWT:ValidIssuer"],
     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"]))
+  };
+  // Reject tokens whose security stamp no longer matches the user's (signed out everywhere,
+  // password changed, account deleted). Tokens issued before stamps existed are rejected too.
+  options.Events = new JwtBearerEvents
+  {
+    OnTokenValidated = async context =>
+    {
+      string userId = context.Principal?.FindFirst("userId")?.Value;
+      string stamp = context.Principal?.FindFirst(UsersController.SecurityStampClaim)?.Value;
+      if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(stamp))
+      {
+        context.Fail("Token has no security stamp.");
+        return;
+      }
+
+      var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+      ApplicationUser user = await userManager.FindByIdAsync(userId);
+      if (user == null || user.SecurityStamp != stamp)
+      {
+        context.Fail("Token has been revoked.");
+      }
+    }
   };
 });
 
