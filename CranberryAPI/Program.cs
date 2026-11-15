@@ -32,14 +32,11 @@ builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection("Gem
 builder.Services.AddHttpClient(GeminiAudioService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddScoped<IGeminiAudioService, GeminiAudioService>();
 
+string connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
+// AutoDetect opens a connection to ask the server its version: do it once, not for every DbContext (every request).
+var serverVersion = new Lazy<ServerVersion>(() => ServerVersion.AutoDetect(connectionString));
 builder.Services.AddDbContext<CranberryAPIContext>(
-                  dbContextOptions => dbContextOptions
-                    .UseMySql(
-                    	builder.Configuration["ConnectionStrings:DefaultConnection"],
-                      ServerVersion.AutoDetect(builder.Configuration["ConnectionStrings:DefaultConnection"]
-                    )
-                  )
-                );
+  dbContextOptions => dbContextOptions.UseMySql(connectionString, serverVersion.Value));
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
   {
@@ -97,10 +94,12 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Tests set Database__MigrateOnStartup=false and create their own schema.
+if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<CranberryAPI.Models.CranberryAPIContext>();
-    dbContext.Database.Migrate();
+  using var scope = app.Services.CreateScope();
+  var dbContext = scope.ServiceProvider.GetRequiredService<CranberryAPI.Models.CranberryAPIContext>();
+  dbContext.Database.Migrate();
 }
 
 
@@ -127,3 +126,6 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
+
+// Lets the test project start the app with WebApplicationFactory<Program>.
+public partial class Program { }

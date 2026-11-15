@@ -10,6 +10,7 @@ export const vi: Record<TKey, string> = {
   'common.noEntriesYet': 'Chưa có bài viết',
   'common.signOut': 'Đăng xuất',
   'common.close': 'Đóng',
+  'common.retry': 'Thử lại',
   'common.loading': 'Đang tải',
 
   // ---- Navigation ----
@@ -25,6 +26,7 @@ export const vi: Record<TKey, string> = {
   'auth.quote': '“Đặt điện thoại xuống. Sống trọn cuộc đời.”',
   'auth.pitch': 'Unplug là cuốn nhật ký nhỏ mỗi ngày giúp bạn bớt phụ thuộc vào điện thoại — nhận ra cơn thèm, để ý mức stress và nhìn lại một ngày của mình.',
   'auth.email': 'Email',
+  'auth.loadFailed': 'Không kết nối được máy chủ để tải tài khoản. Kiểm tra mạng rồi thử lại.',
   'auth.password': 'Mật khẩu',
   'auth.username': 'Tên người dùng',
   'auth.showPassword': 'Hiện mật khẩu',
@@ -229,4 +231,6 @@ export const vi: Record<TKey, string> = {
   'error.code.AlreadyVerified': 'Email này đã được xác nhận. Vui lòng đăng nhập.',
   'error.code.EmailNotConfirmed': 'Vui lòng xác nhận email trước khi đăng nhập.',
   'error.code.DuplicateDate': 'Bạn đã có bài viết cho ngày này.',
+  'error.code.PendingVerification': 'Email này đang chờ xác nhận. Hãy kiểm tra hộp thư để lấy mã, hoặc dùng mật khẩu bạn đã đăng ký.',
+  'error.code.LockedOut': 'Đăng nhập sai quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.',
 }

@@ -60,23 +60,31 @@ export default function EntryEditor() {
 
   useEffect(() => {
     if (!userId) return
+    // Ignore answers that arrive after leaving the page (or switching to another entry).
+    let cancelled = false
     setLoading(true)
     if (isNew) {
       // One reflection per day: if today's already exists, open it instead.
       journalsApi
         .list(userId)
         .then((list) => {
+          if (cancelled) return
           const today = findByDate(list, toISODate())
           if (today) navigate(`/journal/${today.journalId}`, { replace: true })
           else setExisting(list)
         })
         .catch(() => {})
-        .finally(() => setLoading(false))
-      return
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+      return () => {
+        cancelled = true
+      }
     }
     journalsApi
       .get(userId, Number(id))
-      .then((j) =>
+      .then((j) => {
+        if (cancelled) return
         setForm({
           date: normalizeDate(j.date) || toISODate(),
           mood: Math.min(5, Math.max(1, j.mood || 3)),
@@ -87,10 +95,17 @@ export default function EntryEditor() {
           gratitude: j.gratitude ?? '',
           win: j.win ?? '',
           improvement: j.improvement ?? '',
-        }),
-      )
-      .catch((e) => setError(errorText(e, t)))
-      .finally(() => setLoading(false))
+        })
+      })
+      .catch((e) => {
+        if (!cancelled) setError(errorText(e, t))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [id, isNew, userId, navigate])
 
   const set = <K extends keyof JournalInput>(k: K, v: JournalInput[K]) => setForm((f) => ({ ...f, [k]: v }))
@@ -238,7 +253,7 @@ export default function EntryEditor() {
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" loading={saving} disabled={!!clash || streamingField !== null || live !== null}>
+          <Button type="submit" loading={saving} disabled={!!clash || voiceField !== null || streamingField !== null || live !== null}>
             {t(isNew ? 'editor.saveNew' : 'common.saveChanges')}
           </Button>
         </div>
