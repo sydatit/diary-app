@@ -78,7 +78,16 @@ export function useI18n() {
   return ctx
 }
 
-const CODES = new Set(['Invalid', 'Expired', 'TooManyAttempts', 'AlreadyVerified', 'EmailNotConfirmed', 'DuplicateDate'])
+const CODES = new Set([
+  'Invalid',
+  'Expired',
+  'TooManyAttempts',
+  'AlreadyVerified',
+  'EmailNotConfirmed',
+  'DuplicateDate',
+  'PendingVerification',
+  'LockedOut',
+])
 
 /**
  * Readable, translated text for a thrown error: known API codes and client-side errors are translated,

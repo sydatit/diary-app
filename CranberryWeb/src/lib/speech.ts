@@ -46,8 +46,9 @@ export function isSpeechSupported(): boolean {
 /**
  * - `denied`: microphone permission refused.
  * - `unavailable`: the speech service can't be used here (network, Siri/dictation off, language, no mic).
+ * - `ended`: listening stopped by itself (long silence, or it couldn't restart); `text` is what was heard.
  */
-export type SpeechFailure = 'denied' | 'unavailable'
+export type SpeechFailure = 'denied' | 'unavailable' | 'ended'
 
 export interface LiveTranscript {
   /** Stop listening; resolves with the whole transcript once the last words are finalised. */
@@ -87,6 +88,14 @@ export function startLiveTranscript(opts: {
   const finish = () => {
     ended = true
     resolveStop?.(fullFinal())
+  }
+
+  /** Listening stopped on its own: hand the words to stop() if it's waiting, otherwise tell the caller. */
+  const giveUp = () => {
+    stopping = true
+    ended = true
+    if (resolveStop) resolveStop(fullFinal())
+    else opts.onError('ended', fullFinal())
   }
 
   const begin = () => {
@@ -133,15 +142,11 @@ export function startLiveTranscript(opts: {
       if (stopping) return finish()
       // The service stopped by itself (silence timeout, ~60s limit on Chrome): carry on listening.
       emptyRestarts = heardThisSession ? 0 : emptyRestarts + 1
-      if (emptyRestarts > MAX_EMPTY_RESTARTS) {
-        stopping = true
-        return finish()
-      }
+      if (emptyRestarts > MAX_EMPTY_RESTARTS) return giveUp()
       try {
         begin()
       } catch {
-        stopping = true
-        finish()
+        giveUp()
       }
     }
 

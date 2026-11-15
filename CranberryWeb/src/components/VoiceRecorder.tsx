@@ -193,6 +193,12 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
     if (timerRef.current !== null) window.clearInterval(timerRef.current)
     timerRef.current = null
     if (kind === 'denied') return fail(t('voice.micDenied'))
+    // Stopped listening by itself (long pause): finish as if Stop was pressed, with what it heard.
+    if (kind === 'ended') {
+      cleanup()
+      setStatus('processing')
+      return void submitText(text)
+    }
     // Service gave up midway: use what it heard. Nothing heard yet: switch to recording audio, no extra tap needed.
     if (text.trim()) return void submitText(text)
     onLiveRef.current?.(null)

@@ -105,7 +105,8 @@ async function readBody(res: Response): Promise<unknown> {
 }
 
 function toError(res: Response, body: unknown): ApiError {
-  if (res.status === 401 && session.token) onUnauthorized?.()
+  // Also when the token is already gone (signed out in another tab): this tab must leave the app too.
+  if (res.status === 401) onUnauthorized?.()
   const message = extractMessage(body)
   if (message) return new ApiError(res.status, message, body)
   const [text, key] = fallbackError(res.status)

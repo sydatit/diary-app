@@ -9,6 +9,7 @@ export const en = {
   'common.signOut': 'Sign out',
   'common.close': 'Close',
   'common.loading': 'Loading',
+  'common.retry': 'Try again',
 
   // ---- Navigation ----
   'nav.today': 'Today',
@@ -24,6 +25,7 @@ export const en = {
   'auth.pitch': "Unplug is a quiet daily journal for loosening your phone's grip — notice the urge, check in on your stress, and reflect on your day.",
   'auth.email': 'Email',
   'auth.password': 'Password',
+  'auth.loadFailed': "We couldn't reach the server to load your account. Check your connection and try again.",
   'auth.username': 'Username',
   'auth.showPassword': 'Show password',
   'auth.hidePassword': 'Hide password',
@@ -227,6 +229,8 @@ export const en = {
   'error.code.AlreadyVerified': 'This email is already verified. Please sign in.',
   'error.code.EmailNotConfirmed': 'Please verify your email before signing in.',
   'error.code.DuplicateDate': 'You already have an entry for this date.',
+  'error.code.PendingVerification': 'This email is waiting for verification. Check your inbox for the code, or use the password you registered with.',
+  'error.code.LockedOut': 'Too many failed sign-in attempts. Please wait a few minutes and try again.',
 }
 
 export type TKey = keyof typeof en
