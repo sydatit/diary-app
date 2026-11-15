@@ -67,13 +67,21 @@ public class UsersController : ControllerBase
         return StatusCode(429, new { status = "Error", message = $"Please wait {wait}s before requesting a new code.", retryAfter = wait });
       }
 
-      // Pending account: refresh its details with what the user just submitted.
+      // Pending account. Never change its password here: the code goes to the owner's inbox, so whoever
+      // re-registered with a new password would get the account once the owner verifies.
+      // Only the person who knows the original password may update the details and get a new code.
+      if (!await _userManager.CheckPasswordAsync(user, dto.Password))
+      {
+        return BadRequest(new
+        {
+          status = "Error",
+          code = "PendingVerification",
+          message = "This email is waiting for verification. Check your inbox, or register again with the password you used before."
+        });
+      }
+
       IdentityResult nameResult = await _userManager.SetUserNameAsync(user, dto.UserName.Trim());
       if (!nameResult.Succeeded) return BadRequest(nameResult.Errors);
-
-      IdentityResult pwdResult = await _userManager.RemovePasswordAsync(user);
-      if (pwdResult.Succeeded) pwdResult = await _userManager.AddPasswordAsync(user, dto.Password);
-      if (!pwdResult.Succeeded) return BadRequest(pwdResult.Errors);
 
       ApplyHabits(user, dto.DetoxStartDate, dto.BaselinePickups, dto.DailyPickupGoal);
       await _userManager.UpdateAsync(user);
@@ -149,8 +157,23 @@ public class UsersController : ControllerBase
   {
     ApplicationUser user = await _userManager.FindByEmailAsync(userInfo.Email.Trim());
 
-    if (user != null && await _userManager.CheckPasswordAsync(user, userInfo.Password))
+    // Too many wrong passwords: refuse for a while, even the right one (Identity lockout: 5 tries, 5 minutes).
+    if (user != null && await _userManager.IsLockedOutAsync(user))
     {
+      return LockedOut(user);
+    }
+
+    if (user != null && !await _userManager.CheckPasswordAsync(user, userInfo.Password))
+    {
+      await _userManager.AccessFailedAsync(user);
+      if (await _userManager.IsLockedOutAsync(user)) return LockedOut(user);
+      user = null;
+    }
+
+    if (user != null)
+    {
+      await _userManager.ResetAccessFailedCountAsync(user);
+
       if (!user.EmailConfirmed)
       {
         return StatusCode(403, new
@@ -179,6 +202,20 @@ public class UsersController : ControllerBase
 
     IdentityResult result = await _userManager.UpdateSecurityStampAsync(user);
     return result.Succeeded ? NoContent() : BadRequest(result.Errors);
+  }
+
+  private IActionResult LockedOut(ApplicationUser user)
+  {
+    int retryAfter = user.LockoutEnd.HasValue
+      ? Math.Max(1, (int)Math.Ceiling((user.LockoutEnd.Value - DateTimeOffset.UtcNow).TotalSeconds))
+      : 60;
+    return StatusCode(429, new
+    {
+      status = "Error",
+      code = "LockedOut",
+      message = "Too many failed sign-in attempts. Please try again later.",
+      retryAfter
+    });
   }
 
   private async Task<IActionResult> TrySendCode(ApplicationUser user)

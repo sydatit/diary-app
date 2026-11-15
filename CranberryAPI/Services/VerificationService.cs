@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using CranberryAPI.Models;
 
 namespace CranberryAPI.Services;
@@ -23,11 +24,13 @@ public class VerificationService : IVerificationService
 
   private readonly UserManager<ApplicationUser> _userManager;
   private readonly IEmailService _email;
+  private readonly CranberryAPIContext _db;
 
-  public VerificationService(UserManager<ApplicationUser> userManager, IEmailService email)
+  public VerificationService(UserManager<ApplicationUser> userManager, IEmailService email, CranberryAPIContext db)
   {
     _userManager = userManager;
     _email = email;
+    _db = db;
   }
 
   public int CooldownRemaining(ApplicationUser user)
@@ -45,7 +48,8 @@ public class VerificationService : IVerificationService
     user.EmailCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes);
     user.EmailCodeSentAt = DateTime.UtcNow;
     user.EmailCodeAttempts = 0;
-    await _userManager.UpdateAsync(user);
+    // Don't email a code that wasn't saved: it could never be verified.
+    EnsureSaved(await _userManager.UpdateAsync(user));
 
     await _email.SendAsync(user.Email, "Your Unplug verification code", PlainBody(user.UserName, code), HtmlBody(user.UserName, code));
   }
@@ -54,24 +58,38 @@ public class VerificationService : IVerificationService
   {
     if (user.EmailConfirmed) return VerifyResult.AlreadyVerified;
     if (user.EmailCodeHash == null || user.EmailCodeExpiresAt == null) return VerifyResult.Expired;
-    if (user.EmailCodeAttempts >= MaxAttempts) return VerifyResult.TooManyAttempts;
     if (DateTime.UtcNow > user.EmailCodeExpiresAt.Value) return VerifyResult.Expired;
+
+    // Count the attempt in the database before looking at the code, in one statement, so guesses sent
+    // in parallel can't all read the same count and slip past the limit.
+    int counted = await _db.Database.ExecuteSqlInterpolatedAsync(
+      $"UPDATE AspNetUsers SET EmailCodeAttempts = EmailCodeAttempts + 1 WHERE Id = {user.Id} AND EmailCodeAttempts < {MaxAttempts}");
+    if (counted == 0) return VerifyResult.TooManyAttempts;
 
     byte[] expected = Encoding.ASCII.GetBytes(user.EmailCodeHash);
     byte[] actual = Encoding.ASCII.GetBytes(Hash(user.Id, code ?? ""));
     if (!CryptographicOperations.FixedTimeEquals(expected, actual))
     {
-      user.EmailCodeAttempts++;
-      await _userManager.UpdateAsync(user);
-      return user.EmailCodeAttempts >= MaxAttempts ? VerifyResult.TooManyAttempts : VerifyResult.Invalid;
+      int attempts = await _db.Users.Where(u => u.Id == user.Id).Select(u => u.EmailCodeAttempts).SingleAsync();
+      return attempts >= MaxAttempts ? VerifyResult.TooManyAttempts : VerifyResult.Invalid;
     }
 
     user.EmailConfirmed = true;
     user.EmailCodeHash = null;
     user.EmailCodeExpiresAt = null;
     user.EmailCodeAttempts = 0;
-    await _userManager.UpdateAsync(user);
+    // Only report success (and hand out a token) once the confirmation is really saved.
+    EnsureSaved(await _userManager.UpdateAsync(user));
     return VerifyResult.Success;
+  }
+
+  private static void EnsureSaved(IdentityResult result)
+  {
+    if (!result.Succeeded)
+    {
+      throw new InvalidOperationException("Could not save the verification state: " +
+        string.Join("; ", result.Errors.Select(e => e.Code)));
+    }
   }
 
   private static string Hash(string userId, string code)
