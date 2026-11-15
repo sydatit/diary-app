@@ -198,10 +198,13 @@ public class UsersController : ControllerBase
 
     SymmetricSecurityKey authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
 
+    // How long a sign-in lasts; override with JWT__ExpiryDays. Defaults to 30 days.
+    double expiryDays = double.TryParse(_configuration["JWT:ExpiryDays"], out var d) && d > 0 ? d : 30;
+
     JwtSecurityToken token = new JwtSecurityToken(
       issuer: _configuration["JWT:ValidIssuer"],
       audience: _configuration["JWT:ValidAudience"],
-      expires: DateTime.Now.AddHours(12),
+      expires: DateTime.UtcNow.AddDays(expiryDays),
       claims: authClaims,
       signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
     );
