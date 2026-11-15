@@ -39,6 +39,8 @@ public class UsersController : ControllerBase
 
   private string CurrentUserId => User.FindFirst("userId")?.Value;
 
+  public const string SecurityStampClaim = "stamp";
+
   // ## # # # # # # # # # # # # # # ##
   // # USER AUTHENTICATION ENDPOINTS #
   // ## # # # # # # # # # # # # # # ##
@@ -110,7 +112,7 @@ public class UsersController : ControllerBase
     switch (result)
     {
       case VerifyResult.Success:
-        return Ok(new { status = "Success", message = "Email verified.", token = CreateToken(user), userId = user.Id });
+        return Ok(new { status = "Success", message = "Email verified.", token = await CreateTokenAsync(user), userId = user.Id });
       case VerifyResult.AlreadyVerified:
         // Never hand out a token here: the code was not checked.
         return BadRequest(new { status = "Error", code = "AlreadyVerified", message = "This email is already verified. Please sign in." });
@@ -160,10 +162,23 @@ public class UsersController : ControllerBase
         });
       }
 
-      return Ok(new { status = "Success", message = $"{userInfo.Email} signed in.", token = CreateToken(user), userId = user.Id });
+      return Ok(new { status = "Success", message = $"{userInfo.Email} signed in.", token = await CreateTokenAsync(user), userId = user.Id });
     }
 
     return BadRequest(new { status = "Error", message = "Unable to sign in." });
+  }
+
+  // POST: api/users/signout-all
+  // Revokes every token issued to this user, on all devices (including this one).
+  [HttpPost("signout-all")]
+  [Authorize]
+  public async Task<IActionResult> SignOutEverywhere()
+  {
+    ApplicationUser user = await _userManager.FindByIdAsync(CurrentUserId);
+    if (user == null) return NotFound();
+
+    IdentityResult result = await _userManager.UpdateSecurityStampAsync(user);
+    return result.Succeeded ? NoContent() : BadRequest(result.Errors);
   }
 
   private async Task<IActionResult> TrySendCode(ApplicationUser user)
@@ -188,20 +203,27 @@ public class UsersController : ControllerBase
   }
 
   // Generate a user's Token
-  private string CreateToken(ApplicationUser user)
+  private async Task<string> CreateTokenAsync(ApplicationUser user)
   {
+    // The stamp ties the token to the user's current sessions; changing it revokes every token.
+    if (string.IsNullOrEmpty(user.SecurityStamp)) await _userManager.UpdateSecurityStampAsync(user);
+
     List<Claim> authClaims = new List<Claim>
     {
       new Claim("userId", user.Id),
-      new Claim("userName", user.UserName)
+      new Claim("userName", user.UserName),
+      new Claim(SecurityStampClaim, user.SecurityStamp)
     };
 
     SymmetricSecurityKey authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
 
+    // How long a sign-in lasts; override with JWT__ExpiryDays. Defaults to 30 days.
+    double expiryDays = double.TryParse(_configuration["JWT:ExpiryDays"], out var d) && d > 0 ? d : 30;
+
     JwtSecurityToken token = new JwtSecurityToken(
       issuer: _configuration["JWT:ValidIssuer"],
       audience: _configuration["JWT:ValidAudience"],
-      expires: DateTime.Now.AddHours(12),
+      expires: DateTime.UtcNow.AddDays(expiryDays),
       claims: authClaims,
       signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
     );

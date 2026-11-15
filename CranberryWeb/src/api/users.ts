@@ -11,5 +11,6 @@ export const usersApi = {
     api<AuthResult>('/api/users/signin', { method: 'POST', body: { email, password } }),
   profile: () => api<UserProfile>('/api/users/profile'),
   update: (id: string, setup: DetoxSetup) => api(`/api/users/${id}`, { method: 'PUT', body: setup }),
+  signOutEverywhere: () => api('/api/users/signout-all', { method: 'POST' }),
   remove: (id: string) => api(`/api/users/${id}`, { method: 'DELETE' }),
 }

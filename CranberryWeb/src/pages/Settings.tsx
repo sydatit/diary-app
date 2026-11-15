@@ -25,6 +25,7 @@ export default function Settings() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [revoking, setRevoking] = useState(false)
 
   if (!profile || !userId) return null
   // Split around the name so it can be bold in any language's word order.
@@ -42,6 +43,17 @@ export default function Settings() {
       setError(errorText(err, t, 'settings.saveFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function signOutEverywhere() {
+    setRevoking(true)
+    try {
+      await usersApi.signOutEverywhere()
+      signOut()
+    } catch (err) {
+      toast(errorText(err, t, 'settings.signOutEverywhereFailed'), 'error')
+      setRevoking(false)
     }
   }
 
@@ -143,6 +155,16 @@ export default function Settings() {
           </Button>
         </div>
       </form>
+
+      <section className="card appearance">
+        <div className="grow">
+          <h2>{t('settings.sessionsTitle')}</h2>
+          <p className="muted small">{t('settings.sessionsHint')}</p>
+        </div>
+        <Button variant="secondary" icon={<LogOut size={16} />} loading={revoking} onClick={signOutEverywhere}>
+          {t('settings.signOutEverywhere')}
+        </Button>
+      </section>
 
       <section className="card danger-zone">
         <div className="grow">
