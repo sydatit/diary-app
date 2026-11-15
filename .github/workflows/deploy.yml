@@ -1,19 +1,52 @@
-name: Deploy to Oracle
+name: Test & Deploy
 
 on:
   push:
     branches: [main]
+  pull_request: # chạy test cho mọi PR, không deploy
   workflow_dispatch: # cho phép bấm chạy tay trong tab Actions
 
-# Không cho 2 lần deploy chạy chồng lên nhau
-concurrency:
-  group: deploy-oracle
-  cancel-in-progress: false
-
 jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+      - name: Run API tests
+        run: dotnet test CranberryAPI.Tests --nologo
+
+  test-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: CranberryWeb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: CranberryWeb/package-lock.json
+      - run: npm ci
+      - name: Run web tests
+        run: npm test
+      - name: Type-check & build
+        run: npm run build
+
   deploy:
+    # Chỉ deploy khi push vào main (không phải PR) và cả hai bộ test đều qua.
+    needs: [test-api, test-web]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Không cho 2 lần deploy chạy chồng lên nhau
+    concurrency:
+      group: deploy-oracle
+      cancel-in-progress: false
     steps:
       - name: Set up SSH key
         run: |
