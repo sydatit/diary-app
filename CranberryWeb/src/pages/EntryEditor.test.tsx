@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { Link, Route } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EntryEditor from './EntryEditor'
@@ -22,14 +22,13 @@ vi.mock('../components/VoiceRecorder', () => ({
 
 const journals = vi.mocked(journalsApi)
 
-const entry = (id: number, date: string, bedtime: string | null = null): Journal => ({
+const entry = (id: number, date: string): Journal => ({
   journalId: id,
   date,
   mood: 4,
   urgeLevel: 3,
   pickups: 0,
   stressLevel: 2,
-  bedtime,
   dayReflection: 'Good day',
   gratitude: null,
   win: null,
@@ -96,32 +95,6 @@ describe('EntryEditor', () => {
     renderApp(<EntryEditor />, { route: '/journal/3', path: '/journal/:id' })
     expect(await screen.findByDisplayValue('Good day')).toBeInTheDocument()
     expect(journals.get).toHaveBeenCalledWith('u1', 3)
-  })
-
-  it('saves the bedtime that was entered, and null when it is left empty', async () => {
-    journals.list.mockResolvedValue([])
-    journals.create.mockResolvedValue(entry(1, toISODate()))
-    renderApp(<EntryEditor />, { route: '/journal/new', path: '/journal/new', extraRoutes: <Route path="/journal" element={<p>list</p>} /> })
-    const bedtime = await screen.findByLabelText('What time did you go to bed last night?')
-    expect(bedtime).toHaveValue('')
-
-    fireEvent.change(bedtime, { target: { value: '23:40' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
-    expect(bedtime).toHaveValue('')
-    fireEvent.click(screen.getByRole('button', { name: 'Save reflection' }))
-    await waitFor(() => expect(journals.create).toHaveBeenCalledWith('u1', expect.objectContaining({ bedtime: null })))
-  })
-
-  it('shows the bedtime of an existing entry and sends the changed one', async () => {
-    journals.get.mockResolvedValue(entry(3, '2026-11-10', '00:15'))
-    journals.update.mockResolvedValue(undefined as never)
-    renderApp(<EntryEditor />, { route: '/journal/3', path: '/journal/:id', extraRoutes: <Route path="/journal" element={<p>list</p>} /> })
-    const bedtime = await screen.findByLabelText('What time did you go to bed last night?')
-    expect(bedtime).toHaveValue('00:15')
-
-    fireEvent.change(bedtime, { target: { value: '22:50' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-    await waitFor(() => expect(journals.update).toHaveBeenCalledWith('u1', 3, expect.objectContaining({ bedtime: '22:50' })))
   })
 
   it('cannot be saved while a recording is in progress (regression)', async () => {

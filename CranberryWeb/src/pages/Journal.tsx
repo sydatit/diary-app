@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookOpen, PenLine, Search } from 'lucide-react'
 import { useJournals } from '../lib/useJournals'
+import { useSleep } from '../lib/useSleep'
+import { bedtimeByDate } from '../lib/sleep'
 import { EntryCard } from '../components/EntryCard'
 import { EmptyState } from '../components/EmptyState'
 import { FullPageSpinner } from '../components/Spinner'
 import { Alert } from '../components/Alert'
-import { parseDate } from '../lib/date'
+import { normalizeDate, parseDate } from '../lib/date'
 import { useI18n } from '../i18n'
 import type { Journal as Entry } from '../types'
 
@@ -14,6 +16,8 @@ export default function Journal() {
   const { journals, loading, error } = useJournals()
   const { t, fmt } = useI18n()
   const [query, setQuery] = useState('')
+  const { sleep } = useSleep()
+  const bedtimes = useMemo(() => bedtimeByDate(sleep), [sleep])
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -78,7 +82,7 @@ export default function Journal() {
                 <h2 className="month-title">{month}</h2>
                 <div className="entries">
                   {items.map((j) => (
-                    <EntryCard key={j.journalId} entry={j} />
+                    <EntryCard key={j.journalId} entry={j} bedtime={bedtimes.get(normalizeDate(j.date))} />
                   ))}
                 </div>
               </section>

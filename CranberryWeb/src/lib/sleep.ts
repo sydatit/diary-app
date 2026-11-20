@@ -1,4 +1,6 @@
 import type { TKey } from '../i18n/en'
+import type { SleepLog } from '../types'
+import { addDays, toISODate } from './date'
 
 // Bedtimes are stored as "HH:mm" (24h). To compare and average times that straddle midnight they are
 // measured in minutes from noon, so 23:30 -> 690 and 00:30 -> 750 (rather than 1410 and 30).
@@ -8,6 +10,21 @@ const NOON = 12 * 60
 
 export function isBedtime(value: string | null | undefined): value is string {
   return !!value && HHMM.test(value)
+}
+
+/**
+ * The bedtime log for someone going to bed right now. A night is filed under the day it closes, so a
+ * tap before noon (00:30, say) still belongs to the day before.
+ */
+export function sleepNow(now: Date = new Date()): SleepLog {
+  const day = now.getHours() < 12 ? addDays(now, -1) : now
+  const bedtime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return { date: toISODate(day), bedtime }
+}
+
+/** Valid bedtimes keyed by their date. */
+export function bedtimeByDate(logs: SleepLog[]): Map<string, string> {
+  return new Map(logs.filter((l) => isBedtime(l.bedtime)).map((l) => [l.date, l.bedtime]))
 }
 
 /** Minutes after noon (0..1439), or null when the value isn't a valid "HH:mm". */

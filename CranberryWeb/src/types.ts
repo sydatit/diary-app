@@ -23,8 +23,6 @@ export interface Journal {
   /** No longer shown; kept so editing an old entry doesn't wipe it. */
   pickups: number
   stressLevel: number | null
-  /** "HH:mm" (24h) the user went to sleep the night before; null when not logged. */
-  bedtime: string | null
   dayReflection: string | null
   gratitude: string | null
   win: string | null
@@ -34,8 +32,16 @@ export interface Journal {
 
 export type JournalInput = Pick<
   Journal,
-  'date' | 'mood' | 'urgeLevel' | 'stressLevel' | 'bedtime' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
+  'date' | 'mood' | 'urgeLevel' | 'stressLevel' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
 >
+
+/** One tap of the "going to bed" button. */
+export interface SleepLog {
+  /** YYYY-MM-DD of the day that night closes (a 00:30 bedtime still belongs to the day before). */
+  date: string
+  /** "HH:mm" (24h), local time. */
+  bedtime: string
+}
 
 export interface Wrapped<T> {
   status: string

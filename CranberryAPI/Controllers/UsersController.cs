@@ -323,9 +323,10 @@ public class UsersController : ControllerBase
     ApplicationUser user = await _userManager.FindByIdAsync(id);
     if (user == null) return NotFound();
 
-    // The Journals FK has no cascade, so remove the user's entries first.
+    // The Journals FK has no cascade, so remove the user's entries (and sleep logs) first.
     await using var tx = await _db.Database.BeginTransactionAsync();
     _db.Journals.RemoveRange(_db.Journals.Where(j => j.UserId == id));
+    _db.SleepLogs.RemoveRange(_db.SleepLogs.Where(s => s.UserId == id));
     await _db.SaveChangesAsync();
 
     IdentityResult result = await _userManager.DeleteAsync(user);
@@ -454,6 +455,88 @@ public class UsersController : ControllerBase
     return NoContent();
   }
 
+  // ## # # # # # # # # # # ##
+  // # USER SLEEP ENDPOINTS  #
+  // ## # # # # # # # # # # ##
+
+  // GET: api/users/{id}/sleep
+  [HttpGet("{id}/sleep")]
+  [Authorize]
+  public async Task<IActionResult> GetSleepLogs(string id)
+  {
+    if (CurrentUserId != id) return NotFound();
+
+    List<SleepLog> logs = await _db.SleepLogs
+      .Where(s => s.UserId == id)
+      .OrderByDescending(s => s.Date)
+      .ToListAsync();
+
+    return Ok(new Response<List<SleepLog>>
+    {
+      Status = "Success",
+      Message = "Sleep logs retrieved successfully.",
+      Data = logs
+    });
+  }
+
+  // PUT: api/users/{id}/sleep/{date}
+  // Records (or replaces) the bedtime of the night that closes {date}. The client picks the date and the
+  // time, because only it knows the user's time zone.
+  [HttpPut("{id}/sleep/{date}")]
+  [Authorize]
+  public async Task<IActionResult> PutSleepLog(string id, string date, [FromBody] SleepInputDto input)
+  {
+    if (CurrentUserId != id) return Forbid();
+    if (!IsIsoDate(date)) return BadRequest(new { status = "Error", message = "Date must be in YYYY-MM-DD format." });
+
+    SleepLog log = await _db.SleepLogs.FirstOrDefaultAsync(s => s.UserId == id && s.Date == date);
+    if (log == null)
+    {
+      log = new SleepLog { UserId = id, Date = date };
+      _db.SleepLogs.Add(log);
+    }
+    log.Bedtime = input.Bedtime;
+
+    try
+    {
+      await _db.SaveChangesAsync();
+    }
+    catch (DbUpdateException)
+    {
+      // Two taps raced to create the same night: keep the row that won and store this time on it.
+      _db.Entry(log).State = EntityState.Detached;
+      log = await _db.SleepLogs.FirstOrDefaultAsync(s => s.UserId == id && s.Date == date);
+      if (log == null) throw;
+      log.Bedtime = input.Bedtime;
+      await _db.SaveChangesAsync();
+    }
+
+    return Ok(new Response<SleepLog>
+    {
+      Status = "Success",
+      Message = "Bedtime saved.",
+      Data = log
+    });
+  }
+
+  // DELETE: api/users/{id}/sleep/{date}
+  [HttpDelete("{id}/sleep/{date}")]
+  [Authorize]
+  public async Task<IActionResult> DeleteSleepLog(string id, string date)
+  {
+    if (CurrentUserId != id) return NotFound();
+
+    SleepLog log = await _db.SleepLogs.FirstOrDefaultAsync(s => s.UserId == id && s.Date == date);
+    if (log == null) return NotFound();
+
+    _db.SleepLogs.Remove(log);
+    await _db.SaveChangesAsync();
+    return NoContent();
+  }
+
+  private static bool IsIsoDate(string value) =>
+    DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
+
   private ObjectResult DuplicateDate() =>
     Conflict(new { status = "Error", code = "DuplicateDate", message = "You already have an entry for this date." });
 
@@ -464,7 +547,6 @@ public class UsersController : ControllerBase
     journal.UrgeLevel = input.UrgeLevel;
     journal.Pickups = input.Pickups;
     journal.StressLevel = input.StressLevel;
-    journal.Bedtime = string.IsNullOrWhiteSpace(input.Bedtime) ? null : input.Bedtime;
     journal.DayReflection = input.DayReflection?.Trim();
     journal.Gratitude = input.Gratitude?.Trim();
     journal.Win = input.Win?.Trim();

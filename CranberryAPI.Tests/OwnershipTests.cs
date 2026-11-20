@@ -26,6 +26,8 @@ public class OwnershipTests : IClassFixture<ApiFactory>
     int id = (await created.JsonAsync()).GetProperty("data").GetProperty("journalId").GetInt32();
     string user = $"/api/users/{owner.UserId}";
     string journal = $"{user}/journals/{id}";
+    string sleep = $"{user}/sleep/2026-11-12";
+    (await _http.SendAuthed(HttpMethod.Put, sleep, owner.Token, new { bedtime = "23:30" })).ShouldBe(HttpStatusCode.OK);
 
     var attempts = new (HttpMethod Method, string Url, object Body)[]
     {
@@ -37,6 +39,10 @@ public class OwnershipTests : IClassFixture<ApiFactory>
       (HttpMethod.Post, $"{user}/journals", ApiClient.Journal("2026-11-13")),
       (HttpMethod.Put, journal, ApiClient.Journal("2026-11-12", mood: 1)),
       (HttpMethod.Delete, journal, null),
+      (HttpMethod.Get, $"{user}/sleep", null),
+      (HttpMethod.Put, sleep, new { bedtime = "01:00" }),
+      (HttpMethod.Put, $"{user}/sleep/2026-11-13", new { bedtime = "01:00" }),
+      (HttpMethod.Delete, sleep, null),
     };
 
     foreach (var (method, url, body) in attempts)
@@ -52,6 +58,7 @@ public class OwnershipTests : IClassFixture<ApiFactory>
       var j = await db.Journals.SingleAsync(x => x.JournalId == id);
       Assert.Equal(3, j.Mood);
       Assert.Equal(1, await db.Journals.CountAsync(x => x.UserId == owner.UserId));
+      Assert.Equal("23:30", (await db.SleepLogs.SingleAsync(x => x.UserId == owner.UserId)).Bedtime);
       Assert.NotEqual(1, (await db.Users.SingleAsync(u => u.Id == owner.UserId)).DailyPickupGoal);
     });
   }
