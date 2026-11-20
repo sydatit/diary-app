@@ -10,6 +10,7 @@ const j = (date: string, extra: Partial<Journal> = {}): Journal => ({
   urgeLevel: 5,
   pickups: 0,
   stressLevel: 4,
+  bedtime: null,
   dayReflection: null,
   gratitude: null,
   win: null,
@@ -69,6 +70,23 @@ describe('stats', () => {
 
   it('averages are null with no recent entries', () => {
     expect(computeStats(profile('2026-11-01'), []).avgMood7).toBeNull()
+    expect(computeStats(profile('2026-11-01'), []).avgBedtime7).toBeNull()
+  })
+
+  it('7-day average bedtime crosses midnight and skips entries without one', () => {
+    const s = computeStats(profile('2026-11-01'), [
+      j('2026-11-15', { bedtime: '23:30' }),
+      j('2026-11-14', { bedtime: '00:30' }),
+      j('2026-11-13'),
+      j('2026-11-08', { bedtime: '04:00' }), // 7 days ago: outside
+    ])
+    expect(s.avgBedtime7).toBe('00:00')
+    expect(computeStats(profile('2026-11-01'), [j('2026-11-15')]).avgBedtime7).toBeNull()
+  })
+
+  it('lastNDays carries the bedtime of each day', () => {
+    const days = lastNDays([j('2026-11-15', { bedtime: '23:10' }), j('2026-11-14')], 3)
+    expect(days.map((d) => d.bedtime)).toEqual([null, null, '23:10'])
   })
 
   it('lastNDays ends today and fills gaps with nulls', () => {

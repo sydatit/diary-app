@@ -20,6 +20,9 @@ public class JournalInputDto
   [Range(1, 10)]
   public int? StressLevel { get; set; }
 
+  [RegularExpression(@"^([01]\d|2[0-3]):[0-5]\d$", ErrorMessage = "Bedtime must be in HH:mm (24-hour) format.")]
+  public string Bedtime { get; set; }
+
   [MaxLength(4000)] public string DayReflection { get; set; }
   [MaxLength(2000)] public string Gratitude { get; set; }
   [MaxLength(2000)] public string Win { get; set; }

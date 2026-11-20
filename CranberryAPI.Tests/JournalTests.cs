@@ -98,6 +98,38 @@ public class JournalTests : IClassFixture<ApiFactory>
   }
 
   [Fact]
+  public async Task Bedtime_round_trips_and_can_be_cleared()
+  {
+    Session s = await _factory.NewUserAsync(_http);
+    int id = await CreateAsync(s, "2026-11-10");
+    string url = $"/api/users/{s.UserId}/journals/{id}";
+
+    var got = (await (await _http.SendAuthed(HttpMethod.Get, url, s.Token)).JsonAsync()).GetProperty("data");
+    Assert.Equal("23:30", got.GetProperty("bedtime").GetString());
+
+    (await _http.SendAuthed(HttpMethod.Put, url, s.Token, ApiClient.Journal("2026-11-10", bedtime: "00:45"))).ShouldBe(HttpStatusCode.NoContent);
+    got = (await (await _http.SendAuthed(HttpMethod.Get, url, s.Token)).JsonAsync()).GetProperty("data");
+    Assert.Equal("00:45", got.GetProperty("bedtime").GetString());
+
+    // Bedtime is optional: null (and an empty string) clear it.
+    (await _http.SendAuthed(HttpMethod.Put, url, s.Token, ApiClient.Journal("2026-11-10", bedtime: null))).ShouldBe(HttpStatusCode.NoContent);
+    got = (await (await _http.SendAuthed(HttpMethod.Get, url, s.Token)).JsonAsync()).GetProperty("data");
+    Assert.Equal(System.Text.Json.JsonValueKind.Null, got.GetProperty("bedtime").ValueKind);
+  }
+
+  [Theory]
+  [InlineData("25:00")]
+  [InlineData("23:60")]
+  [InlineData("9:05")]
+  [InlineData("11pm")]
+  public async Task Invalid_bedtime_is_400(string bedtime)
+  {
+    Session s = await _factory.NewUserAsync(_http);
+    HttpResponseMessage res = await _http.SendAuthed(HttpMethod.Post, $"/api/users/{s.UserId}/journals", s.Token, ApiClient.Journal("2026-11-12", bedtime: bedtime));
+    res.ShouldBe(HttpStatusCode.BadRequest);
+  }
+
+  [Fact]
   public async Task Updating_the_profile_changes_only_the_given_fields()
   {
     Session s = await _factory.NewUserAsync(_http);

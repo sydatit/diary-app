@@ -89,6 +89,8 @@ export const vi: Record<TKey, string> = {
   'dash.avgStress': 'Stress TB · 7 ngày',
   'dash.avgMood': 'Tâm trạng TB · 7 ngày',
   'dash.avgUrge': 'Mức thèm TB · 7 ngày',
+  'dash.avgBedtime': 'Giờ đi ngủ TB · 7 ngày',
+  'dash.noBedtimeYet': 'Chưa ghi giờ đi ngủ',
   'dash.streak': 'Chuỗi ngày viết',
   'dash.streakSub_one': 'ngày · tuần này viết {n}/7',
   'dash.streakSub_other': 'ngày · tuần này viết {n}/7',
@@ -106,6 +108,8 @@ export const vi: Record<TKey, string> = {
   'chart.stress': 'stress {n}/10',
   'chart.legendUrge': 'Mức thèm cầm điện thoại',
   'chart.legendStress': 'Stress',
+  'chart.bedtimeTitle': 'Giờ đi ngủ',
+  'chart.bedtime': 'đi ngủ lúc {time}',
 
   // ---- Journal list ----
   'journal.count_one': '{n} bài viết',
@@ -119,6 +123,7 @@ export const vi: Record<TKey, string> = {
   'journal.undated': 'Không có ngày',
   'entry.noText': 'Chưa viết nội dung',
   'entry.stress': 'Stress {n}/10',
+  'entry.bedtime': 'Đi ngủ lúc {time}',
 
   // ---- Editor ----
   'editor.new': 'Bài viết mới',
@@ -132,6 +137,9 @@ export const vi: Record<TKey, string> = {
   'editor.moodQ': 'Nhìn chung bạn thấy thế nào?',
   'editor.urgeQ': 'Bạn thèm cầm điện thoại đến mức nào?',
   'editor.stressQ': 'Bạn thấy stress đến mức nào?',
+  'editor.bedtimeQ': 'Đêm qua bạn đi ngủ lúc mấy giờ?',
+  'editor.bedtimeHint': 'Không bắt buộc — tính cho đêm trước ngày này.',
+  'editor.bedtimeClear': 'Xoá',
   'editor.reflection': 'Nhìn lại',
   'editor.dayQ': 'Hôm nay thế nào?',
   'editor.dayPh': 'Chuyện gì đã xảy ra, bạn dùng thời gian ra sao, điện thoại chiếm bao nhiêu…',
@@ -184,6 +192,11 @@ export const vi: Record<TKey, string> = {
   'level.stress.5': 'Quá tải',
   'level.stress.min': 'Thư thái',
   'level.stress.max': 'Quá tải',
+  'sleep.band.1': 'Ngủ sớm',
+  'sleep.band.2': 'Đúng giờ',
+  'sleep.band.3': 'Hơi muộn',
+  'sleep.band.4': 'Muộn',
+  'sleep.band.5': 'Rất muộn',
   'mood.aria': 'Tâm trạng',
   'mood.1': 'Tệ',
   'mood.2': 'Buồn',

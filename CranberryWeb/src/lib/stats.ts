@@ -1,6 +1,7 @@
 import type { Journal, UserProfile } from '../types'
 import type { TKey } from '../i18n/en'
 import { addDays, daysBetween, parseDate, startOfDay, toISODate } from './date'
+import { avgBedtime, isBedtime } from './sleep'
 
 export interface Stats {
   dayNumber: number
@@ -8,6 +9,8 @@ export interface Stats {
   avgStress7: number | null
   avgUrge7: number | null
   avgMood7: number | null
+  /** Average bedtime ("HH:mm") over the last 7 days' entries that logged one. */
+  avgBedtime7: string | null
   streak: number
   entries7: number
 }
@@ -44,6 +47,7 @@ export function computeStats(profile: UserProfile, journals: Journal[]): Stats {
     avgStress7: avg((j) => j.stressLevel),
     avgUrge7: avg((j) => j.urgeLevel),
     avgMood7: avg((j) => j.mood),
+    avgBedtime7: avgBedtime(recent.map((j) => j.bedtime)),
     streak,
     entries7: recent.length,
   }
@@ -63,6 +67,7 @@ export interface DayPoint {
   urge: number | null
   stress: number | null
   mood: number | null
+  bedtime: string | null
 }
 
 export function lastNDays(journals: Journal[], n: number): DayPoint[] {
@@ -71,8 +76,8 @@ export function lastNDays(journals: Journal[], n: number): DayPoint[] {
     const date = addDays(today, i - n + 1)
     const j = findByDate(journals, toISODate(date))
     return j
-      ? { date, urge: j.urgeLevel, stress: j.stressLevel ?? null, mood: j.mood }
-      : { date, urge: null, stress: null, mood: null }
+      ? { date, urge: j.urgeLevel, stress: j.stressLevel ?? null, mood: j.mood, bedtime: isBedtime(j.bedtime) ? j.bedtime : null }
+      : { date, urge: null, stress: null, mood: null, bedtime: null }
   })
 }
 
