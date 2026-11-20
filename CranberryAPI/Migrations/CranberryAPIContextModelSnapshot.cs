@@ -110,10 +110,6 @@ namespace CranberryAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    b.Property<string>("Bedtime")
-                        .HasMaxLength(5)
-                        .HasColumnType("varchar(5)");
-
                     b.Property<string>("Date")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -152,6 +148,34 @@ namespace CranberryAPI.Migrations
                         .IsUnique();
 
                     b.ToTable("Journals");
+                });
+
+            modelBuilder.Entity("CranberryAPI.Models.SleepLog", b =>
+                {
+                    b.Property<int>("SleepLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Bedtime")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("varchar(5)");
+
+                    b.Property<string>("Date")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("SleepLogId");
+
+                    b.HasIndex("UserId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("SleepLogs");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -289,6 +313,15 @@ namespace CranberryAPI.Migrations
                         .HasForeignKey("UserId");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CranberryAPI.Models.SleepLog", b =>
+                {
+                    b.HasOne("CranberryAPI.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

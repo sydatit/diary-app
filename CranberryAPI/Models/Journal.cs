@@ -16,9 +16,6 @@ public class Journal
   public int Pickups { get; set; }          // phone pickups that day (no longer shown in the web app)
   public int? StressLevel { get; set; }     // 1..10, null on entries written before stress tracking
 
-  [MaxLength(5)]
-  public string Bedtime { get; set; }       // "HH:mm" (24h) the user went to sleep the night before; null if not logged
-
   public string DayReflection { get; set; } // How was today?
   public string Gratitude { get; set; }     // What am I grateful for?
   public string Win { get; set; }           // What did I do well?

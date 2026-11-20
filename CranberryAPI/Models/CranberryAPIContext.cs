@@ -6,6 +6,7 @@ namespace CranberryAPI.Models;
 public class CranberryAPIContext : IdentityDbContext<ApplicationUser>
 {
   public DbSet<Journal> Journals { get; set; }
+  public DbSet<SleepLog> SleepLogs { get; set; }
 
   public CranberryAPIContext(DbContextOptions<CranberryAPIContext> options) : base(options) { }
 
@@ -16,5 +17,15 @@ public class CranberryAPIContext : IdentityDbContext<ApplicationUser>
     builder.Entity<Journal>()
       .HasIndex(j => new { j.UserId, j.Date })
       .IsUnique();
+
+    builder.Entity<SleepLog>()
+      .HasIndex(s => new { s.UserId, s.Date })
+      .IsUnique();
+    builder.Entity<SleepLog>()
+      .HasOne<ApplicationUser>()
+      .WithMany()
+      .HasForeignKey(s => s.UserId)
+      .OnDelete(DeleteBehavior.Cascade)
+      .IsRequired();
   }
 }

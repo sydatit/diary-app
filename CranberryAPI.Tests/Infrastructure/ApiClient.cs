@@ -71,14 +71,13 @@ public static class ApiClient
     }
   }
 
-  public static object Journal(string date, int mood = 3, string bedtime = "23:30") => new
+  public static object Journal(string date, int mood = 3) => new
   {
     date,
     mood,
     urgeLevel = 5,
     pickups = 10,
     stressLevel = 4,
-    bedtime,
     dayReflection = "A calm day",
   };
 }
