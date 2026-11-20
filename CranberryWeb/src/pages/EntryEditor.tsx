@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Trash2, X } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { journalsApi } from '../api/journals'
 import { Button } from '../components/Button'
@@ -18,6 +18,7 @@ import type { DiarySection } from '../api/diary'
 import { normalizeDate, parseDate, toISODate } from '../lib/date'
 import { errorText, useI18n, type TKey } from '../i18n'
 import { findByDate } from '../lib/stats'
+import { isBedtime } from '../lib/sleep'
 import type { Journal, JournalInput } from '../types'
 
 type TextField = 'dayReflection' | 'gratitude' | 'win' | 'improvement'
@@ -34,6 +35,7 @@ const EMPTY: JournalInput = {
   mood: 3,
   urgeLevel: 5,
   stressLevel: 5,
+  bedtime: null,
   pickups: 0,
   dayReflection: '',
   gratitude: '',
@@ -90,6 +92,7 @@ export default function EntryEditor() {
           mood: Math.min(5, Math.max(1, j.mood || 3)),
           urgeLevel: Math.min(10, Math.max(1, j.urgeLevel || 5)),
           stressLevel: j.stressLevel ? Math.min(10, Math.max(1, j.stressLevel)) : 5,
+          bedtime: isBedtime(j.bedtime) ? j.bedtime : null,
           pickups: j.pickups ?? 0,
           dayReflection: j.dayReflection ?? '',
           gratitude: j.gratitude ?? '',
@@ -217,6 +220,21 @@ export default function EntryEditor() {
           <div className="field">
             <label>{t('editor.stressQ')}</label>
             <StressSlider value={form.stressLevel ?? 5} onChange={(n) => set('stressLevel', n)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="bedtime">{t('editor.bedtimeQ')}</label>
+            <div className="bedtime-row">
+              <div className="input-wrap">
+                <input id="bedtime" type="time" value={form.bedtime ?? ''} onChange={(e) => set('bedtime', e.target.value || null)} />
+              </div>
+              {form.bedtime && (
+                <Button type="button" variant="ghost" icon={<X size={16} />} onClick={() => set('bedtime', null)}>
+                  {t('editor.bedtimeClear')}
+                </Button>
+              )}
+            </div>
+            <p className="field-hint">{t('editor.bedtimeHint')}</p>
           </div>
         </section>
 

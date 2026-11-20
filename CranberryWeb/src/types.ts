@@ -23,6 +23,8 @@ export interface Journal {
   /** No longer shown; kept so editing an old entry doesn't wipe it. */
   pickups: number
   stressLevel: number | null
+  /** "HH:mm" (24h) the user went to sleep the night before; null when not logged. */
+  bedtime: string | null
   dayReflection: string | null
   gratitude: string | null
   win: string | null
@@ -32,7 +34,7 @@ export interface Journal {
 
 export type JournalInput = Pick<
   Journal,
-  'date' | 'mood' | 'urgeLevel' | 'stressLevel' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
+  'date' | 'mood' | 'urgeLevel' | 'stressLevel' | 'bedtime' | 'pickups' | 'dayReflection' | 'gratitude' | 'win' | 'improvement'
 >
 
 export interface Wrapped<T> {

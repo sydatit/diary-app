@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, Flame, Heart, PenLine, Smile, Sparkles, Star, Waves } from 'lucide-react'
+import { Activity, Flame, Heart, Moon, PenLine, Smile, Sparkles, Star, Waves } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { useJournals } from '../lib/useJournals'
 import { computeStats, findByDate, lastNDays, moodOf, stressLabel, urgeLabel } from '../lib/stats'
 import { parseDate, toISODate } from '../lib/date'
 import { useI18n, type TKey } from '../i18n'
 import { TrendChart } from '../components/TrendChart'
+import { BedtimeChart } from '../components/BedtimeChart'
+import { bedtimeLabel } from '../lib/sleep'
 import { EntryCard } from '../components/EntryCard'
 import { Spinner } from '../components/Spinner'
 import { Alert } from '../components/Alert'
@@ -103,6 +105,12 @@ export default function Dashboard() {
           sub={s.avgUrge7 == null ? t('common.noEntriesYet') : t(urgeLabel(s.avgUrge7))}
         />
         <Stat
+          icon={<Moon size={18} />}
+          label={t('dash.avgBedtime')}
+          value={s.avgBedtime7 ?? '—'}
+          sub={s.avgBedtime7 == null ? t('dash.noBedtimeYet') : t(bedtimeLabel(s.avgBedtime7))}
+        />
+        <Stat
           icon={<Flame size={18} />}
           label={t('dash.streak')}
           value={String(s.streak)}
@@ -121,7 +129,10 @@ export default function Dashboard() {
             <Spinner />
           </div>
         ) : (
-          <TrendChart data={lastNDays(journals, 14)} />
+          <>
+            <TrendChart data={lastNDays(journals, 14)} />
+            <BedtimeChart data={lastNDays(journals, 14)} />
+          </>
         )}
       </section>
 

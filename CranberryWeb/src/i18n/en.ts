@@ -87,6 +87,8 @@ export const en = {
   'dash.avgStress': 'Avg stress · 7 days',
   'dash.avgMood': 'Avg mood · 7 days',
   'dash.avgUrge': 'Avg urge · 7 days',
+  'dash.avgBedtime': 'Avg bedtime · 7 days',
+  'dash.noBedtimeYet': 'No bedtime logged yet',
   'dash.streak': 'Reflection streak',
   'dash.streakSub_one': 'day · wrote {n}/7 this week',
   'dash.streakSub_other': 'days · wrote {n}/7 this week',
@@ -104,6 +106,8 @@ export const en = {
   'chart.stress': 'stress {n}/10',
   'chart.legendUrge': 'Urge to grab the phone',
   'chart.legendStress': 'Stress',
+  'chart.bedtimeTitle': 'Bedtime',
+  'chart.bedtime': 'went to bed at {time}',
 
   // ---- Journal list ----
   'journal.count_one': '{n} reflection',
@@ -117,6 +121,7 @@ export const en = {
   'journal.undated': 'Undated',
   'entry.noText': 'No reflection written',
   'entry.stress': 'Stress {n}/10',
+  'entry.bedtime': 'Went to bed at {time}',
 
   // ---- Editor ----
   'editor.new': 'New reflection',
@@ -130,6 +135,9 @@ export const en = {
   'editor.moodQ': 'How did you feel overall?',
   'editor.urgeQ': 'How strong was the urge to grab your phone?',
   'editor.stressQ': 'How stressed did you feel?',
+  'editor.bedtimeQ': 'What time did you go to bed last night?',
+  'editor.bedtimeHint': 'Optional — the night before this day.',
+  'editor.bedtimeClear': 'Clear',
   'editor.reflection': 'Reflection',
   'editor.dayQ': 'How was today?',
   'editor.dayPh': 'What happened, how you spent your time, how the phone fit in…',
@@ -182,6 +190,11 @@ export const en = {
   'level.stress.5': 'Overwhelmed',
   'level.stress.min': 'Calm',
   'level.stress.max': 'Overwhelmed',
+  'sleep.band.1': 'Early night',
+  'sleep.band.2': 'On time',
+  'sleep.band.3': 'A bit late',
+  'sleep.band.4': 'Late',
+  'sleep.band.5': 'Very late',
   'mood.aria': 'Mood',
   'mood.1': 'Rough',
   'mood.2': 'Low',

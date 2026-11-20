@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
+import { Moon } from 'lucide-react'
 import type { Journal } from '../types'
 import { parseDate } from '../lib/date'
 import { useI18n } from '../i18n'
 import { firstLine, levelColor, moodOf, stressLabel } from '../lib/stats'
+import { bedtimeColor, bedtimeLabel, isBedtime } from '../lib/sleep'
 import { UrgeDots } from './UrgeSlider'
 
 export function EntryCard({ entry }: { entry: Journal }) {
@@ -30,6 +32,18 @@ export function EntryCard({ entry }: { entry: Journal }) {
               style={{ color: levelColor(stress), background: `color-mix(in srgb, ${levelColor(stress)} 12%, transparent)` }}
             >
               {t('entry.stress', { n: stress })}
+            </span>
+          )}
+          {isBedtime(entry.bedtime) && (
+            <span
+              className="entry-stress"
+              title={`${t('entry.bedtime', { time: entry.bedtime })} · ${t(bedtimeLabel(entry.bedtime))}`}
+              style={{
+                color: bedtimeColor(entry.bedtime),
+                background: `color-mix(in srgb, ${bedtimeColor(entry.bedtime)} 12%, transparent)`,
+              }}
+            >
+              <Moon size={12} aria-hidden /> {entry.bedtime}
             </span>
           )}
         </div>
