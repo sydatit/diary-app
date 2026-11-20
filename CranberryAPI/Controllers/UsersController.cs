@@ -464,6 +464,7 @@ public class UsersController : ControllerBase
     journal.UrgeLevel = input.UrgeLevel;
     journal.Pickups = input.Pickups;
     journal.StressLevel = input.StressLevel;
+    journal.Bedtime = string.IsNullOrWhiteSpace(input.Bedtime) ? null : input.Bedtime;
     journal.DayReflection = input.DayReflection?.Trim();
     journal.Gratitude = input.Gratitude?.Trim();
     journal.Win = input.Win?.Trim();

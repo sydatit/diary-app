@@ -110,6 +110,10 @@ namespace CranberryAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
+                    b.Property<string>("Bedtime")
+                        .HasMaxLength(5)
+                        .HasColumnType("varchar(5)");
+
                     b.Property<string>("Date")
                         .IsRequired()
                         .HasMaxLength(10)
