@@ -4,11 +4,13 @@ import { Activity, Flame, Heart, Moon, PenLine, Smile, Sparkles, Star, Waves } f
 import { useAuth } from '../auth/AuthContext'
 import { useJournals } from '../lib/useJournals'
 import { computeStats, findByDate, lastNDays, moodOf, stressLabel, urgeLabel } from '../lib/stats'
-import { parseDate, toISODate } from '../lib/date'
+import { normalizeDate, parseDate, toISODate } from '../lib/date'
 import { useI18n, type TKey } from '../i18n'
 import { TrendChart } from '../components/TrendChart'
 import { BedtimeChart } from '../components/BedtimeChart'
-import { bedtimeLabel } from '../lib/sleep'
+import { BedtimeButton } from '../components/BedtimeButton'
+import { useSleep } from '../lib/useSleep'
+import { bedtimeByDate, bedtimeLabel } from '../lib/sleep'
 import { EntryCard } from '../components/EntryCard'
 import { Spinner } from '../components/Spinner'
 import { Alert } from '../components/Alert'
@@ -25,10 +27,13 @@ const MILESTONES = [1, 3, 7, 14, 21, 30, 60, 90, 180, 365]
 export default function Dashboard() {
   const { profile } = useAuth()
   const { journals, loading, error } = useJournals()
+  const { sleep, log, undo } = useSleep()
   const { t, fmt } = useI18n()
   if (!profile) return null
 
-  const s = computeStats(profile, journals)
+  const s = computeStats(profile, journals, sleep)
+  const bedtimes = bedtimeByDate(sleep)
+  const days = lastNDays(journals, 14, sleep)
   const todayEntry = findByDate(journals, toISODate())
   const nextMilestone = MILESTONES.find((m) => m > s.dayNumber) ?? Math.ceil((s.dayNumber + 1) / 365) * 365
   const prevMilestone = [...MILESTONES].reverse().find((m) => m <= s.dayNumber) ?? 0
@@ -85,6 +90,8 @@ export default function Dashboard() {
         )}
       </section>
 
+      <BedtimeButton sleep={sleep} log={log} undo={undo} />
+
       <section className="stats">
         <Stat
           icon={<Activity size={18} />}
@@ -130,8 +137,8 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
-            <TrendChart data={lastNDays(journals, 14)} />
-            <BedtimeChart data={lastNDays(journals, 14)} />
+            <TrendChart data={days} />
+            <BedtimeChart data={days} />
           </>
         )}
       </section>
@@ -179,7 +186,7 @@ export default function Dashboard() {
         ) : (
           <div className="entries">
             {journals.slice(0, 3).map((j) => (
-              <EntryCard key={j.journalId} entry={j} />
+              <EntryCard key={j.journalId} entry={j} bedtime={bedtimes.get(normalizeDate(j.date))} />
             ))}
           </div>
         )}

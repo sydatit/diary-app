@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeStats, findByDate, lastNDays, levelColor, moodOf, sortByDateDesc, stressLabel, urgeLabel } from './stats'
-import type { Journal, UserProfile } from '../types'
+import type { Journal, SleepLog, UserProfile } from '../types'
 
 let nextId = 1
 const j = (date: string, extra: Partial<Journal> = {}): Journal => ({
@@ -10,7 +10,6 @@ const j = (date: string, extra: Partial<Journal> = {}): Journal => ({
   urgeLevel: 5,
   pickups: 0,
   stressLevel: 4,
-  bedtime: null,
   dayReflection: null,
   gratitude: null,
   win: null,
@@ -73,26 +72,24 @@ describe('stats', () => {
     expect(computeStats(profile('2026-11-01'), []).avgBedtime7).toBeNull()
   })
 
-  it('7-day average bedtime crosses midnight and skips entries without one', () => {
-    const s = computeStats(profile('2026-11-01'), [
-      j('2026-11-15', { bedtime: '23:30' }),
-      j('2026-11-14', { bedtime: '00:30' }),
-      j('2026-11-13'),
-      j('2026-11-08', { bedtime: '04:00' }), // 7 days ago: outside
-    ])
-    expect(s.avgBedtime7).toBe('00:00')
-    expect(computeStats(profile('2026-11-01'), [j('2026-11-15')]).avgBedtime7).toBeNull()
+  it('7-day average bedtime comes from the sleep log, crosses midnight and needs no journal entry', () => {
+    const sleep: SleepLog[] = [
+      { date: '2026-11-15', bedtime: '23:30' },
+      { date: '2026-11-14', bedtime: '00:30' },
+      { date: '2026-11-08', bedtime: '04:00' }, // 7 days ago: outside
+    ]
+    expect(computeStats(profile('2026-11-01'), [], sleep).avgBedtime7).toBe('00:00')
+    expect(computeStats(profile('2026-11-01'), [j('2026-11-15')], []).avgBedtime7).toBeNull()
   })
 
-  it('lastNDays carries the bedtime of each day', () => {
-    const days = lastNDays([j('2026-11-15', { bedtime: '23:10' }), j('2026-11-14')], 3)
-    expect(days.map((d) => d.bedtime)).toEqual([null, null, '23:10'])
-  })
-
-  it('lastNDays ends today and fills gaps with nulls', () => {
-    const days = lastNDays([j('2026-11-15', { urgeLevel: 7 }), j('2026-11-13')], 3)
-    expect(days.map((d) => d.date.getDate())).toEqual([13, 14, 15])
-    expect(days.map((d) => d.urge)).toEqual([5, null, 7])
+  it('lastNDays carries the bedtime of each night, with or without an entry that day', () => {
+    const sleep: SleepLog[] = [
+      { date: '2026-11-15', bedtime: '23:10' },
+      { date: '2026-11-14', bedtime: '00:20' },
+    ]
+    const days = lastNDays([j('2026-11-15')], 3, sleep)
+    expect(days.map((d) => d.bedtime)).toEqual([null, '00:20', '23:10'])
+    expect(days.map((d) => d.urge)).toEqual([null, null, 5])
   })
 
   it('findByDate matches on the calendar day', () => {

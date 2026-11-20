@@ -7,7 +7,7 @@ import { firstLine, levelColor, moodOf, stressLabel } from '../lib/stats'
 import { bedtimeColor, bedtimeLabel, isBedtime } from '../lib/sleep'
 import { UrgeDots } from './UrgeSlider'
 
-export function EntryCard({ entry }: { entry: Journal }) {
+export function EntryCard({ entry, bedtime }: { entry: Journal; bedtime?: string | null }) {
   const { t, fmt } = useI18n()
   const d = parseDate(entry.date)
   const mood = moodOf(entry.mood)
@@ -34,16 +34,16 @@ export function EntryCard({ entry }: { entry: Journal }) {
               {t('entry.stress', { n: stress })}
             </span>
           )}
-          {isBedtime(entry.bedtime) && (
+          {isBedtime(bedtime) && (
             <span
               className="entry-stress"
-              title={`${t('entry.bedtime', { time: entry.bedtime })} · ${t(bedtimeLabel(entry.bedtime))}`}
+              title={`${t('entry.bedtime', { time: bedtime })} · ${t(bedtimeLabel(bedtime))}`}
               style={{
-                color: bedtimeColor(entry.bedtime),
-                background: `color-mix(in srgb, ${bedtimeColor(entry.bedtime)} 12%, transparent)`,
+                color: bedtimeColor(bedtime),
+                background: `color-mix(in srgb, ${bedtimeColor(bedtime)} 12%, transparent)`,
               }}
             >
-              <Moon size={12} aria-hidden /> {entry.bedtime}
+              <Moon size={12} aria-hidden /> {bedtime}
             </span>
           )}
         </div>

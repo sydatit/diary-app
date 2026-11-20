@@ -1,7 +1,7 @@
-import type { Journal, UserProfile } from '../types'
+import type { Journal, SleepLog, UserProfile } from '../types'
 import type { TKey } from '../i18n/en'
 import { addDays, daysBetween, parseDate, startOfDay, toISODate } from './date'
-import { avgBedtime, isBedtime } from './sleep'
+import { avgBedtime, bedtimeByDate } from './sleep'
 
 export interface Stats {
   dayNumber: number
@@ -9,13 +9,13 @@ export interface Stats {
   avgStress7: number | null
   avgUrge7: number | null
   avgMood7: number | null
-  /** Average bedtime ("HH:mm") over the last 7 days' entries that logged one. */
+  /** Average bedtime ("HH:mm") over the nights logged in the last 7 days. */
   avgBedtime7: string | null
   streak: number
   entries7: number
 }
 
-export function computeStats(profile: UserProfile, journals: Journal[]): Stats {
+export function computeStats(profile: UserProfile, journals: Journal[], sleep: SleepLog[] = []): Stats {
   const today = startOfDay(new Date())
   const start = parseDate(profile.detoxStartDate)
   const started = !!start && start <= today
@@ -47,7 +47,14 @@ export function computeStats(profile: UserProfile, journals: Journal[]): Stats {
     avgStress7: avg((j) => j.stressLevel),
     avgUrge7: avg((j) => j.urgeLevel),
     avgMood7: avg((j) => j.mood),
-    avgBedtime7: avgBedtime(recent.map((j) => j.bedtime)),
+    avgBedtime7: avgBedtime(
+      sleep
+        .filter((l) => {
+          const d = parseDate(l.date)
+          return d && d >= weekAgo && d <= today
+        })
+        .map((l) => l.bedtime),
+    ),
     streak,
     entries7: recent.length,
   }
@@ -70,14 +77,16 @@ export interface DayPoint {
   bedtime: string | null
 }
 
-export function lastNDays(journals: Journal[], n: number): DayPoint[] {
+export function lastNDays(journals: Journal[], n: number, sleep: SleepLog[] = []): DayPoint[] {
   const today = startOfDay(new Date())
+  const bedtimes = bedtimeByDate(sleep)
   return Array.from({ length: n }, (_, i) => {
     const date = addDays(today, i - n + 1)
     const j = findByDate(journals, toISODate(date))
+    const bedtime = bedtimes.get(toISODate(date)) ?? null
     return j
-      ? { date, urge: j.urgeLevel, stress: j.stressLevel ?? null, mood: j.mood, bedtime: isBedtime(j.bedtime) ? j.bedtime : null }
-      : { date, urge: null, stress: null, mood: null, bedtime: null }
+      ? { date, urge: j.urgeLevel, stress: j.stressLevel ?? null, mood: j.mood, bedtime }
+      : { date, urge: null, stress: null, mood: null, bedtime }
   })
 }
 
