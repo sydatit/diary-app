@@ -833,6 +833,8 @@ A React + Vite + TypeScript frontend lives in `CranberryWeb/`.
 * `web` → http://localhost:3000 (nginx serves the SPA and proxies `/api/*` to the `api` service, so no CORS setup is needed). Change the host port with `WEB_PORT=8081 docker compose up -d`.
 * `api` → http://localhost:8080
 
+**Production** — https://unplug.datnguyen.site. TLS is terminated by the shared Caddy container of the elearning project (`/home/ubuntu/mycode/BEDNTN/Caddyfile`), which proxies to `web` over the external Docker network `elearning_default` (alias `unplug-web`). The network must exist before `docker compose up`; on another machine, create it with `docker network create elearning_default` or point `PROXY_NETWORK` at an existing one.
+
 **Local dev** (Node 20+):
 ```bash
 cd CranberryWeb

@@ -32,8 +32,20 @@ services:
       # Frontend (nginx). /api/* được proxy sang service `api` trong cùng network.
       # Port 80 trên host đang bị dùng bởi project khác -> mặc định 3000.
       - "${WEB_PORT:-3000}:80"
+    networks:
+      default:
+      # Mạng của Caddy (dự án elearning) đang giữ cổng 80/443 trên máy chủ.
+      # Caddy trỏ unplug.datnguyen.site -> unplug-web:80.
+      proxy:
+        aliases:
+          - unplug-web
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-elearning_default}
+    external: true
