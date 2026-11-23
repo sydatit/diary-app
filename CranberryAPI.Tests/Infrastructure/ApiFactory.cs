@@ -15,7 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace CranberryAPI.Tests.Infrastructure;
 
 /// <summary>
-/// The real API over TestServer, with a throwaway SQLite database, a fake mailbox and a fake Gemini.
+/// The real API over TestServer, with a throwaway SQLite database, a fake mailbox and a fake transcriber.
 /// </summary>
 public class ApiFactory : WebApplicationFactory<Program>
 {
@@ -25,7 +25,7 @@ public class ApiFactory : WebApplicationFactory<Program>
   private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"cranberry-test-{Guid.NewGuid():N}.db");
 
   public FakeEmailService Email { get; } = new();
-  public FakeGemini Gemini { get; } = new();
+  public FakeTranscriber Transcriber { get; } = new();
 
   static ApiFactory()
   {
@@ -51,8 +51,8 @@ public class ApiFactory : WebApplicationFactory<Program>
 
       services.RemoveAll<IEmailService>();
       services.AddSingleton<IEmailService>(Email);
-      services.RemoveAll<IGeminiAudioService>();
-      services.AddSingleton<IGeminiAudioService>(Gemini);
+      services.RemoveAll<ITranscriptionService>();
+      services.AddSingleton<ITranscriptionService>(Transcriber);
     });
   }
 

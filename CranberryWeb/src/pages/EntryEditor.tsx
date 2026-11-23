@@ -14,7 +14,6 @@ import { Alert } from '../components/Alert'
 import { FullPageSpinner } from '../components/Spinner'
 import { useToast } from '../components/Toast'
 import { appendLines, normalizeVoiceText } from '../lib/voiceText'
-import type { DiarySection } from '../api/diary'
 import { normalizeDate, parseDate, toISODate } from '../lib/date'
 import { errorText, useI18n, type TKey } from '../i18n'
 import { findByDate } from '../lib/stats'
@@ -22,11 +21,11 @@ import type { Journal, JournalInput } from '../types'
 
 type TextField = 'dayReflection' | 'gratitude' | 'win' | 'improvement'
 
-const PROMPTS: { field: TextField; section: DiarySection; label: TKey; placeholder: TKey; maxLength: number }[] = [
-  { field: 'dayReflection', section: 'reflection', label: 'editor.dayQ', placeholder: 'editor.dayPh', maxLength: 4000 },
-  { field: 'gratitude', section: 'gratitude', label: 'editor.gratitudeQ', placeholder: 'editor.gratitudePh', maxLength: 2000 },
-  { field: 'win', section: 'win', label: 'editor.winQ', placeholder: 'editor.winPh', maxLength: 2000 },
-  { field: 'improvement', section: 'improvement', label: 'editor.improveQ', placeholder: 'editor.improvePh', maxLength: 2000 },
+const PROMPTS: { field: TextField; label: TKey; placeholder: TKey; maxLength: number }[] = [
+  { field: 'dayReflection', label: 'editor.dayQ', placeholder: 'editor.dayPh', maxLength: 4000 },
+  { field: 'gratitude', label: 'editor.gratitudeQ', placeholder: 'editor.gratitudePh', maxLength: 2000 },
+  { field: 'win', label: 'editor.winQ', placeholder: 'editor.winPh', maxLength: 2000 },
+  { field: 'improvement', label: 'editor.improveQ', placeholder: 'editor.improvePh', maxLength: 2000 },
 ]
 
 const EMPTY: JournalInput = {
@@ -109,21 +108,18 @@ export default function EntryEditor() {
   }, [id, isNew, userId, navigate])
 
   const set = <K extends keyof JournalInput>(k: K, v: JournalInput[K]) => setForm((f) => ({ ...f, [k]: v }))
-  // Voice summary: append its lines to the end of that field so the user can review before saving.
-  // While the AI is still writing, the text so far is shown after what was in the box when it started
+  // Voice note: append its lines to the end of that field so the user can review before saving.
+  // While it is still being transcribed, the text so far is shown after what was in the box when it started
   // (`voiceBase`); the box is read-only during that so nothing typed gets overwritten.
   const formRef = useRef(form)
   formRef.current = form
   const voiceBase = useRef<Partial<Record<TextField, string>>>({})
   const [streamingField, setStreamingField] = useState<TextField | null>(null)
-  // Raw words heard while the user is still speaking (browser speech recognition), shown faded in that box.
-  const [live, setLive] = useState<{ field: TextField; text: string } | null>(null)
 
   function showVoice(field: TextField, maxLength: number, base: string, text: string) {
     setForm((f) => ({ ...f, [field]: appendLines(base, normalizeVoiceText(text)).slice(0, maxLength) }))
   }
   function partialVoice(field: TextField, maxLength: number, soFar: string) {
-    setLive((cur) => (cur?.field === field ? null : cur)) // the AI's lines take over from the raw words
     if (voiceBase.current[field] === undefined) {
       voiceBase.current[field] = formRef.current[field] ?? ''
       setStreamingField(field)
@@ -222,7 +218,7 @@ export default function EntryEditor() {
 
         <section className="card editor-section">
           <h2 className="editor-title">{t('editor.reflection')}</h2>
-          {PROMPTS.map(({ field, section, label, placeholder, maxLength }) => (
+          {PROMPTS.map(({ field, label, placeholder, maxLength }) => (
             <AutoTextarea
               key={field}
               label={t(label)}
@@ -232,16 +228,13 @@ export default function EntryEditor() {
               maxLength={maxLength}
               readOnly={streamingField === field}
               aria-busy={streamingField === field}
-              live={live?.field === field ? live.text : undefined}
               addon={
                 <VoiceRecorder
-                  section={section}
                   disabled={voiceField !== null && voiceField !== field}
                   onBusyChange={(busy) => setVoiceField((cur) => (busy ? field : cur === field ? null : cur))}
                   onPartial={(text) => partialVoice(field, maxLength, text)}
                   onSummary={(text) => addVoice(field, maxLength, text)}
                   onAbort={() => abortVoice(field)}
-                  onLive={(text) => setLive((cur) => (text === null ? (cur?.field === field ? null : cur) : { field, text }))}
                 />
               }
             />
@@ -253,7 +246,7 @@ export default function EntryEditor() {
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" loading={saving} disabled={!!clash || voiceField !== null || streamingField !== null || live !== null}>
+          <Button type="submit" loading={saving} disabled={!!clash || voiceField !== null || streamingField !== null}>
             {t(isNew ? 'editor.saveNew' : 'common.saveChanges')}
           </Button>
         </div>

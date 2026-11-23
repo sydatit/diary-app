@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mic, RotateCcw, Square, X } from 'lucide-react'
 import { Spinner } from './Spinner'
-import { diaryApi, type DiarySection } from '../api/diary'
+import { diaryApi } from '../api/diary'
 import { errorText, useI18n, type TKey } from '../i18n'
-import { isSpeechSupported, speechLang, startLiveTranscript, type LiveTranscript, type SpeechFailure } from '../lib/speech'
 
 type Status = 'idle' | 'recording' | 'processing' | 'error'
 
@@ -12,7 +11,8 @@ const MAX_SECONDS = 600
 
 /**
  * Loudest 100ms (RMS, 0..1) must reach this, or the clip is treated as silence and not sent:
- * Gemini makes up a whole diary entry for a silent clip. Speech is ~0.05-0.3, a quiet room ~0.001-0.005.
+ * no point making the user wait for Whisper, which can also "hear" words in noise.
+ * Speech is ~0.05-0.3, a quiet room ~0.001-0.005.
  */
 const SPEECH_RMS = 0.01
 
@@ -74,24 +74,20 @@ function micErrorKey(err: unknown): TKey {
 }
 
 interface Props {
-  /** Which journal prompt this recording is for; tells the AI what kind of lines to write. */
-  section: DiarySection
-  /** Final AI text, once it is complete. */
+  /** Final transcript, once it is complete. */
   onSummary: (text: string) => void
-  /** The AI text so far, while it is still being written (each call has the whole text, not a piece). */
+  /** The transcript so far, while the rest is still being transcribed (each call has the whole text, not a piece). */
   onPartial?: (soFar: string) => void
   /** Streaming failed after `onPartial` was called: drop the partial text. */
   onAbort?: () => void
-  /** Raw words heard so far while the user is still speaking (browser speech recognition); null = stop showing them. */
-  onLive?: (text: string | null) => void
   /** Another field is recording, so this mic is locked. */
   disabled?: boolean
   onBusyChange?: (busy: boolean) => void
 }
 
 /** Round mic button meant to sit inside a textarea (see AutoTextarea `addon`). */
-export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, disabled, onBusyChange }: Props) {
-  const { t, lang } = useI18n()
+export function VoiceRecorder({ onSummary, onPartial, onAbort, disabled, onBusyChange }: Props) {
+  const { t } = useI18n()
   const [status, setStatus] = useState<Status>('idle')
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +97,6 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
   const meterRef = useRef<ReturnType<typeof startLevelMeter> | null>(null)
-  const liveRef = useRef<LiveTranscript | null>(null)
   const unmountedRef = useRef(false)
   // Keep the latest callback without re-creating the recorder handlers.
   const onSummaryRef = useRef(onSummary)
@@ -112,8 +107,6 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
   onPartialRef.current = onPartial
   const onAbortRef = useRef(onAbort)
   onAbortRef.current = onAbort
-  const onLiveRef = useRef(onLive)
-  onLiveRef.current = onLive
 
   const busy = status === 'recording' || status === 'processing'
   useEffect(() => {
@@ -142,15 +135,12 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
         rec.onstop = null
         rec.stop()
       }
-      liveRef.current?.abort()
-      liveRef.current = null
       cleanup()
     }
   }, [])
 
   function fail(message: string) {
     cleanup()
-    onLiveRef.current?.(null)
     setError(message)
     setStatus('error')
   }
@@ -161,51 +151,7 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
     timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000)
   }
 
-  function start() {
-    // Prefer live transcription: words show up while speaking and only text is sent at the end.
-    if (isSpeechSupported() && startLive()) return
-    void startAudio()
-  }
-
-  /** Browser speech recognition. Returns false if it couldn't even start (then record audio instead). */
-  function startLive(): boolean {
-    setError(null)
-    try {
-      liveRef.current = startLiveTranscript({
-        lang: speechLang(lang),
-        onText: (text) => {
-          if (!unmountedRef.current) onLiveRef.current?.(text)
-        },
-        onError: (kind, text) => {
-          if (!unmountedRef.current) onLiveError(kind, text)
-        },
-      })
-    } catch {
-      liveRef.current = null
-      return false
-    }
-    startTimer()
-    return true
-  }
-
-  function onLiveError(kind: SpeechFailure, text: string) {
-    liveRef.current = null
-    if (timerRef.current !== null) window.clearInterval(timerRef.current)
-    timerRef.current = null
-    if (kind === 'denied') return fail(t('voice.micDenied'))
-    // Stopped listening by itself (long pause): finish as if Stop was pressed, with what it heard.
-    if (kind === 'ended') {
-      cleanup()
-      setStatus('processing')
-      return void submitText(text)
-    }
-    // Service gave up midway: use what it heard. Nothing heard yet: switch to recording audio, no extra tap needed.
-    if (text.trim()) return void submitText(text)
-    onLiveRef.current?.(null)
-    void startAudio()
-  }
-
-  async function startAudio() {
+  async function start() {
     if (!supported) return fail(t('voice.unsupported'))
     setError(null)
     let stream: MediaStream
@@ -253,16 +199,6 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
   }, [status, seconds])
 
   function stop() {
-    const live = liveRef.current
-    if (live) {
-      liveRef.current = null
-      cleanup()
-      setStatus('processing')
-      void live.stop().then((text) => {
-        if (!unmountedRef.current) void submitText(text)
-      })
-      return
-    }
     const rec = recorderRef.current
     if (rec && rec.state !== 'inactive') {
       setStatus('processing')
@@ -272,26 +208,16 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
 
   async function submit(blob: Blob) {
     if (blob.size === 0) return fail(t('voice.empty'))
-    await runStream((onText) => diaryApi.voiceToDiaryStream(blob, section, onText))
-  }
-
-  async function submitText(text: string) {
-    if (!text.trim()) return fail(t('voice.noSpeech'))
-    await runStream((onText) => diaryApi.textToDiaryStream(text, section, onText))
-  }
-
-  /** Stream the AI text into the box as it is written. */
-  async function runStream(call: (onText: (soFar: string) => void) => Promise<string>) {
     setStatus('processing')
     let streamed = false
     try {
-      const summary = await call((soFar) => {
+      // The transcript goes into the box segment by segment, as Whisper gets through the recording.
+      const summary = await diaryApi.voiceToDiaryStream(blob, (soFar) => {
         if (unmountedRef.current) return
         streamed = true
         onPartialRef.current?.(soFar)
       })
       if (unmountedRef.current) return
-      onLiveRef.current?.(null)
       onSummaryRef.current(summary)
       setStatus('idle')
     } catch (err) {
@@ -307,7 +233,7 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
         <button
           type="button"
           className="voice-mic"
-          onClick={start}
+          onClick={() => void start()}
           disabled={disabled}
           aria-label={t('voice.record')}
           title={t('voice.record')}
@@ -318,7 +244,7 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
 
       {status === 'recording' && (
         <>
-          <span className="rec-indicator" aria-live="polite" title={liveRef.current ? t('voice.listening') : undefined}>
+          <span className="rec-indicator" aria-live="polite">
             <span className="rec-dot" aria-hidden />
             <span className="rec-timer">{formatTime(seconds)}</span>
           </span>
@@ -342,7 +268,7 @@ export function VoiceRecorder({ section, onSummary, onPartial, onAbort, onLive, 
               <X size={14} />
             </button>
           </div>
-          <button type="button" className="voice-mic" onClick={start} disabled={disabled} aria-label={t('voice.retry')} title={t('voice.retry')}>
+          <button type="button" className="voice-mic" onClick={() => void start()} disabled={disabled} aria-label={t('voice.retry')} title={t('voice.retry')}>
             <RotateCcw size={16} />
           </button>
         </>
