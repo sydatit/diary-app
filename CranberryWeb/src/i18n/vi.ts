@@ -159,7 +159,7 @@ export const vi: Record<TKey, string> = {
   // ---- Voice recorder ----
   'voice.record': 'Ghi âm cho mục này',
   'voice.stop': 'Dừng & viết',
-  'voice.processing': 'AI đang viết nhật ký…',
+  'voice.processing': 'Đang chép lời ghi âm…',
   'voice.retry': 'Thử lại',
   'voice.micDenied': 'Bạn đã từ chối quyền micro. Hãy cho phép micro trong cài đặt trình duyệt rồi thử lại.',
   'voice.micNotFound': 'Không tìm thấy micro trên thiết bị này.',
@@ -169,7 +169,6 @@ export const vi: Record<TKey, string> = {
   'voice.formatUnsupported': 'Trình duyệt không ghi âm được định dạng được hỗ trợ.',
   'voice.empty': 'Không thu được âm thanh. Bạn thử ghi âm lại nhé.',
   'voice.noSpeech': 'Không nghe thấy tiếng nói. Bạn kiểm tra micro rồi thử lại nhé.',
-  'voice.listening': 'Đang nghe… chữ sẽ hiện trong ô',
   'voice.failed': 'Có lỗi xảy ra. Vui lòng thử lại.',
 
   // ---- Levels & moods ----

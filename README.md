@@ -829,9 +829,15 @@ New/changed endpoints: `POST /api/users/register` (sends code) · `POST /api/use
 
 A React + Vite + TypeScript frontend lives in `CranberryWeb/`.
 
-**Docker (recommended)** — `docker compose up -d --build` starts both services:
+**Docker (recommended)** — `docker compose up -d --build` starts the three services:
 * `web` → http://localhost:3000 (nginx serves the SPA and proxies `/api/*` to the `api` service, so no CORS setup is needed). Change the host port with `WEB_PORT=8081 docker compose up -d`.
 * `api` → http://localhost:8080
+* `transcriber` → no host port; a local Whisper server (`transcriber/`, faster-whisper on CPU) that only `api` calls.
+
+**Voice notes** — the mic button in each journal field records audio in the browser and uploads it to `POST /api/diary/voice-to-diary/stream`. The API passes it to the `transcriber` service and streams the transcript back as Server-Sent Events, one line per spoken segment. Nothing leaves the server and no API key is needed.
+* `WHISPER_MODEL` (build arg, default `phowhisper-small`): `phowhisper-<size>` converts `vinai/PhoWhisper-<size>` (Vietnamese fine-tune; lowercase, no punctuation) to CTranslate2 at build time; any other value (`small`, `base`, `medium`...) is a stock multilingual faster-whisper model (punctuated, less accurate for Vietnamese). The model is baked into the image, so changing it needs `docker compose up -d --build transcriber`. The first PhoWhisper build downloads PyTorch and takes several minutes.
+* `WHISPER_THREADS` (default `2`): CPUs Whisper may use. `WHISPER_LANGUAGE` (default `vi`) and `WHISPER_BEAM` (default `1`) can be set on the service too.
+* `Whisper__Url` in `CranberryAPI/.env` (default `http://transcriber:8000`) points the API at another transcriber.
 
 **Production** — https://unplug.datnguyen.site. TLS is terminated by the shared Caddy container of the elearning project (`/home/ubuntu/mycode/BEDNTN/Caddyfile`), which proxies to `web` over the external Docker network `elearning_default` (alias `unplug-web`). The network must exist before `docker compose up`; on another machine, create it with `docker network create elearning_default` or point `PROXY_NETWORK` at an existing one.
 

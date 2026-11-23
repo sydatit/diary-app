@@ -1,14 +1,10 @@
 import { api, apiStream, ApiError } from './client'
 
-/** Journal prompt a voice note is for; matches the API's whitelist. */
-export type DiarySection = 'reflection' | 'gratitude' | 'win' | 'improvement'
-
-function voiceForm(audio: Blob, section?: DiarySection) {
+function voiceForm(audio: Blob) {
   const type = audio.type || 'audio/webm'
   const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm'
   const fd = new FormData()
   fd.append('file', audio, `voice.${ext}`)
-  if (section) fd.append('section', section)
   return fd
 }
 
@@ -18,7 +14,7 @@ async function readDiaryStream(path: string, body: unknown, onText: (soFar: stri
   let done = false
   await apiStream(path, body, (event, data) => {
     const d = (data ?? {}) as { text?: string; message?: string }
-    if (event === 'error') throw new ApiError(502, d.message || 'The AI could not process the recording.', d, d.message ? undefined : 'voice.failed')
+    if (event === 'error') throw new ApiError(502, d.message || 'The recording could not be transcribed.', d, d.message ? undefined : 'voice.failed')
     if (event === 'done') done = true
     else if (typeof d.text === 'string') {
       text += d.text
@@ -31,18 +27,14 @@ async function readDiaryStream(path: string, body: unknown, onText: (soFar: stri
 }
 
 export const diaryApi = {
-  /** Upload a voice recording; the API returns AI-written bullet lines. */
-  voiceToDiary: async (audio: Blob, section?: DiarySection) =>
-    (await api<{ summary: string }>('/api/diary/voice-to-diary', { method: 'POST', body: voiceForm(audio, section) })).summary,
+  /** Upload a voice recording; the API returns what was said, one line per spoken segment. */
+  voiceToDiary: async (audio: Blob) =>
+    (await api<{ summary: string }>('/api/diary/voice-to-diary', { method: 'POST', body: voiceForm(audio) })).summary,
 
   /**
-   * Same as voiceToDiary, but the text arrives in pieces while the AI is still writing.
+   * Same as voiceToDiary, but the text arrives in pieces while the rest is still being transcribed.
    * `onText` gets the whole text so far after each piece; resolves with the final text.
    */
-  voiceToDiaryStream: (audio: Blob, section: DiarySection | undefined, onText: (soFar: string) => void) =>
-    readDiaryStream('/api/diary/voice-to-diary/stream', voiceForm(audio, section), onText),
-
-  /** Turn a transcript made in the browser while the user spoke into diary lines (streamed, like above). */
-  textToDiaryStream: (text: string, section: DiarySection | undefined, onText: (soFar: string) => void) =>
-    readDiaryStream('/api/diary/text-to-diary/stream', { text, section }, onText),
+  voiceToDiaryStream: (audio: Blob, onText: (soFar: string) => void) =>
+    readDiaryStream('/api/diary/voice-to-diary/stream', voiceForm(audio), onText),
 }

@@ -157,7 +157,7 @@ export const en = {
   // ---- Voice recorder ----
   'voice.record': 'Record for this section',
   'voice.stop': 'Stop & write',
-  'voice.processing': 'AI is writing your journal…',
+  'voice.processing': 'Transcribing your recording…',
   'voice.retry': 'Try again',
   'voice.micDenied': 'Microphone access was denied. Allow the microphone in your browser settings and try again.',
   'voice.micNotFound': 'No microphone found on this device.',
@@ -167,7 +167,6 @@ export const en = {
   'voice.formatUnsupported': "This browser can't record in a supported format.",
   'voice.empty': 'No audio was captured. Please try recording again.',
   'voice.noSpeech': "We couldn't hear anything. Check your microphone and try again.",
-  'voice.listening': 'Listening… your words appear in the box',
   'voice.failed': 'Something went wrong. Please try again.',
 
   // ---- Levels & moods ----

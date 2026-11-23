@@ -6,6 +6,8 @@ services:
     image: cranberry-api:latest
     container_name: cranberry-api
     restart: unless-stopped
+    depends_on:
+      - transcriber
     env_file:
       - ./CranberryAPI/.env
     environment:
@@ -13,6 +15,31 @@ services:
     ports:
       # host:container — gọi từ Postman: http://<IP-public-Oracle>:8080
       - "8080:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Whisper chạy local (chép lời ghi âm nhật ký). Chỉ service `api` gọi tới, qua http://transcriber:8000.
+  transcriber:
+    build:
+      context: ./transcriber
+      args:
+        # phowhisper-small (chuyên tiếng Việt) | small | base | medium ... Đổi thì phải build lại image.
+        WHISPER_MODEL: ${WHISPER_MODEL:-phowhisper-small}
+    image: cranberry-transcriber:latest
+    container_name: cranberry-transcriber
+    restart: unless-stopped
+    environment:
+      # Số CPU Whisper được dùng (0 = tất cả).
+      WHISPER_THREADS: ${WHISPER_THREADS:-2}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:

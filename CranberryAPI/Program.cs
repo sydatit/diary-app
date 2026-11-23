@@ -28,9 +28,10 @@ builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Emai
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 
-builder.Services.Configure<GeminiSettings>(builder.Configuration.GetSection("Gemini"));
-builder.Services.AddHttpClient(GeminiAudioService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(90));
-builder.Services.AddScoped<IGeminiAudioService, GeminiAudioService>();
+builder.Services.Configure<WhisperSettings>(builder.Configuration.GetSection("Whisper"));
+// Whisper on CPU: a 10-minute recording can take several minutes, and waits its turn if another one is running.
+builder.Services.AddHttpClient(WhisperTranscriptionService.HttpClientName, c => c.Timeout = TimeSpan.FromMinutes(15));
+builder.Services.AddScoped<ITranscriptionService, WhisperTranscriptionService>();
 
 string connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
 // AutoDetect opens a connection to ask the server its version: do it once, not for every DbContext (every request).

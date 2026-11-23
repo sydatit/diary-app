@@ -14,8 +14,8 @@ vi.mock('../api/journals', () => ({ journalsApi: { list: vi.fn(), get: vi.fn(), 
 // The recorder needs a microphone; a stub lets tests report "busy" like a recording in progress.
 let reportBusy: ((busy: boolean) => void) | null = null
 vi.mock('../components/VoiceRecorder', () => ({
-  VoiceRecorder: (props: { section: string; onBusyChange?: (b: boolean) => void }) => {
-    if (props.section === 'reflection') reportBusy = props.onBusyChange ?? null
+  VoiceRecorder: (props: { onBusyChange?: (b: boolean) => void }) => {
+    reportBusy ??= props.onBusyChange ?? null // the first one rendered is the reflection field's
     return null
   },
 }))
